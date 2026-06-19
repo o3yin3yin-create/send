@@ -1,0 +1,6 @@
+/* Default styles cleared. Custom styling is fully handled in App.css */
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}

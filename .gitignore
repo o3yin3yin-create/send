@@ -1,0 +1,19 @@
+# Dependency directories
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Build artifacts
+client/dist/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Agent files & environment config
+.agents/
+.gemini/
+*.log
+.env
+.env.local
+.env.*.local
