@@ -1207,7 +1207,7 @@ export default function App() {
     <div className="app-container" dir="rtl">
       <header>
         <div className="logo-container">
-          <span className="logo-text">SEND</span>
+          <span className="logo-text">SEND-101</span>
         </div>
         <div className="subtitle">تافة زي هاها شرير زي هيهي</div>
       </header>
@@ -1403,7 +1403,7 @@ export default function App() {
                   <div className="card-scene" onClick={localDrawNumberCard}>
                     <div className="flip-card">
                       <div className="card-face card-back">
-                        <div className="card-back-pattern">SEND</div>
+                        <div className="card-back-pattern">SEND-101</div>
                         <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', marginTop: '1rem' }}>اضغط للسحب</span>
                       </div>
                     </div>
@@ -1417,7 +1417,7 @@ export default function App() {
                   <div className="card-scene">
                     <div className={`flip-card ${cardFlipped ? 'is-flipped' : ''}`}>
                       <div className="card-face card-back">
-                        <div className="card-back-pattern">SEND</div>
+                        <div className="card-back-pattern">SEND-101</div>
                       </div>
                       <div className="card-front card-face">
                         <div className="card-front-label">رقم كارت الضحية</div>
@@ -1804,7 +1804,7 @@ export default function App() {
                   <div className="card-scene" onClick={drawOnlineNumberCard}>
                     <div className="flip-card">
                       <div className="card-face card-back">
-                        <div className="card-back-pattern">SEND</div>
+                        <div className="card-back-pattern">SEND-101</div>
                         <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', marginTop: '1rem' }}>سحب الكارت</span>
                       </div>
                     </div>
@@ -1829,7 +1829,7 @@ export default function App() {
                   <div className="card-scene">
                     <div className={`flip-card ${cardFlipped ? 'is-flipped' : ''}`}>
                       <div className="card-face card-back">
-                        <div className="card-back-pattern">SEND</div>
+                        <div className="card-back-pattern">SEND-101</div>
                       </div>
                       <div className="card-front card-face">
                         <div className="card-front-nobody">Nobody</div>
