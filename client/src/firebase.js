@@ -5,12 +5,13 @@ import { getFirestore } from "firebase/firestore";
 // ⚠️ REPLACE these values with your actual Firebase project config from the Firebase Console!
 // Go to: Firebase Console -> Project Settings -> General -> Your Apps -> Web App -> Firebase SDK configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyD4TxzGkP6UMUm5U-9KpecZ5UPgRKcJW9I",
+  authDomain: "send-101.firebaseapp.com",
+  projectId: "send-101",
+  storageBucket: "send-101.firebasestorage.app",
+  messagingSenderId: "744589658272",
+  appId: "1:744589658272:web:84519436235c13315221c5",
+  measurementId: "G-82VGX008C9"
 };
 
 // Initialize Firebase
