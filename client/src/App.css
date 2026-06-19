@@ -922,4 +922,45 @@ label {
   to { transform: scale(1); opacity: 1; }
 }
 
+/* Phone Dropdown & WhatsApp Styling */
+.dev-phones-dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0.5rem;
+  margin-top: 0.25rem;
+  animation: slideDown 0.2s ease-out;
+}
+
+.dev-phone-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  transition: background 0.2s;
+  direction: ltr;
+}
+
+.dev-phone-item:hover {
+  background: rgba(0, 242, 254, 0.06);
+}
+
+.dev-contact-row.whatsapp:hover {
+  background: rgba(37, 211, 102, 0.08);
+  border-color: #25d366;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
 

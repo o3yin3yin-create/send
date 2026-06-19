@@ -290,6 +290,7 @@ export default function App() {
   // --- UI TRANSITION STATE ---
   const [cardFlipped, setCardFlipped] = useState(false);
   const [showDevModal, setShowDevModal] = useState(false);
+  const [showPhones, setShowPhones] = useState(false);
 
   // Computed players list to track online/disconnected status dynamically
   const playersList = React.useMemo(() => {
@@ -2036,22 +2037,14 @@ export default function App() {
 
       {/* Dev Info Modal */}
       {showDevModal && (
-        <div className="dev-modal-overlay" onClick={() => setShowDevModal(false)}>
+        <div className="dev-modal-overlay" onClick={() => { setShowDevModal(false); setShowPhones(false); }}>
           <div className="dev-modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="dev-modal-close" onClick={() => setShowDevModal(false)}>×</button>
+            <button className="dev-modal-close" onClick={() => { setShowDevModal(false); setShowPhones(false); }}>×</button>
             <div style={{ fontSize: '3.5rem', marginBottom: '0.75rem' }}>👨‍💻</div>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.25rem', color: 'var(--primary)' }}>Omar Adel</h3>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>Full Stack Developer</p>
             
             <div className="dev-contacts">
-              <a href="tel:01050442007" className="dev-contact-row" onClick={() => playSound('click')}>
-                <span>📞</span>
-                <span>01050442007</span>
-              </a>
-              <a href="tel:01099675196" className="dev-contact-row" onClick={() => playSound('click')}>
-                <span>📞</span>
-                <span>01099675196</span>
-              </a>
               <a 
                 href="https://www.instagram.com/jj3_xx?igsh=MWVkaGI5ZjNsb3Nreg%3D%3D&utm_source=qr" 
                 target="_blank" 
@@ -2060,8 +2053,42 @@ export default function App() {
                 onClick={() => playSound('click')}
               >
                 <span>📸</span>
-                <span>Instagram (@jj3_xx)</span>
+                <span>Instagram</span>
               </a>
+
+              <a 
+                href="https://wa.me/201099675196" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="dev-contact-row whatsapp"
+                onClick={() => playSound('click')}
+              >
+                <span>💬</span>
+                <span>WhatsApp</span>
+              </a>
+
+              <button 
+                type="button"
+                className="dev-contact-row phone-btn"
+                style={{ cursor: 'pointer', width: '100%', border: '1px solid var(--border-light)', background: 'rgba(255, 255, 255, 0.03)', textAlign: 'left', outline: 'none' }}
+                onClick={() => { playSound('click'); setShowPhones(!showPhones); }}
+              >
+                <span>📞</span>
+                <span>Phone</span>
+              </button>
+
+              {showPhones && (
+                <div className="dev-phones-dropdown">
+                  <a href="tel:01050442007" className="dev-phone-item" onClick={() => playSound('click')}>
+                    <span>📞</span>
+                    <span>01050442007</span>
+                  </a>
+                  <a href="tel:01099675196" className="dev-phone-item" onClick={() => playSound('click')}>
+                    <span>📞</span>
+                    <span>01099675196</span>
+                  </a>
+                </div>
+              )}
             </div>
           </div>
         </div>
