@@ -2041,7 +2041,7 @@ export default function App() {
             <button className="dev-modal-close" onClick={() => setShowDevModal(false)}>×</button>
             <div style={{ fontSize: '3.5rem', marginBottom: '0.75rem' }}>👨‍💻</div>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.25rem', color: 'var(--primary)' }}>Omar Adel</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>Game Developer</p>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>Full Stack Developer</p>
             
             <div className="dev-contacts">
               <a href="tel:01050442007" className="dev-contact-row" onClick={() => playSound('click')}>
