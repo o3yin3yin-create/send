@@ -289,6 +289,7 @@ export default function App() {
 
   // --- UI TRANSITION STATE ---
   const [cardFlipped, setCardFlipped] = useState(false);
+  const [showDevModal, setShowDevModal] = useState(false);
 
   // Computed players list to track online/disconnected status dynamically
   const playersList = React.useMemo(() => {
@@ -2032,6 +2033,44 @@ export default function App() {
           )}
         </>
       )}
+
+      {/* Dev Info Modal */}
+      {showDevModal && (
+        <div className="dev-modal-overlay" onClick={() => setShowDevModal(false)}>
+          <div className="dev-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="dev-modal-close" onClick={() => setShowDevModal(false)}>×</button>
+            <div style={{ fontSize: '3.5rem', marginBottom: '0.75rem' }}>👨‍💻</div>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.25rem', color: 'var(--primary)' }}>Omar Adel</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>Game Developer</p>
+            
+            <div className="dev-contacts">
+              <a href="tel:01050442007" className="dev-contact-row" onClick={() => playSound('click')}>
+                <span>📞</span>
+                <span>01050442007</span>
+              </a>
+              <a href="tel:01099675196" className="dev-contact-row" onClick={() => playSound('click')}>
+                <span>📞</span>
+                <span>01099675196</span>
+              </a>
+              <a 
+                href="https://www.instagram.com/jj3_xx?igsh=MWVkaGI5ZjNsb3Nreg%3D%3D&utm_source=qr" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="dev-contact-row instagram"
+                onClick={() => playSound('click')}
+              >
+                <span>📸</span>
+                <span>Instagram (@jj3_xx)</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dev Persistent Footer */}
+      <footer className="dev-footer">
+        Developed by <span className="dev-author-link" onClick={() => { playSound('click'); setShowDevModal(true); }}>Omar Adel</span>
+      </footer>
     </div>
   );
 }
