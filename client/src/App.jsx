@@ -235,6 +235,7 @@ function ConfettiEffect() {
 
 export default function App() {
   const [mode, setMode] = useState('select'); // 'select' | 'local' | 'online'
+  const [activeGame, setActiveGame] = useState(null); // null (Hub) | 'send-101'
 
   // Generate or retrieve persistent player ID
   const [myPlayerId] = useState(() => {
@@ -1207,9 +1208,11 @@ export default function App() {
     <div className="app-container" dir="rtl">
       <header>
         <div className="logo-container">
-          <span className="logo-text">SEND-101</span>
+          <span className="logo-text">{activeGame === 'send-101' ? 'SEND-101' : '101-GAMES'}</span>
         </div>
-        <div className="subtitle">تافة زي هاها شرير زي هيهي</div>
+        <div className="subtitle">
+          {activeGame === 'send-101' ? 'تافة زي هاها شرير زي هيهي' : 'منصة الألعاب الجماعية والأحكام'}
+        </div>
       </header>
 
       {errorMessage && (
@@ -1236,8 +1239,57 @@ export default function App() {
         </div>
       )}
 
-      {/* 1. WELCOME SCREEN: Select Mode */}
-      {mode === 'select' && (
+      {/* 0. GAME HUB: Select Game */}
+      {activeGame === null && (
+        <div className="glass-panel hub-panel">
+          <h2 style={{ textAlign: 'center', marginBottom: '1.75rem', fontWeight: 800 }}>منصة الألعاب 🎮</h2>
+          
+          <div className="hub-grid">
+            {/* Game 1: SEND-101 */}
+            <div className="hub-game-card active-game" onClick={() => {
+              playSound('click');
+              setActiveGame('send-101');
+              setMode('select');
+            }}>
+              <div className="hub-game-icon-container">
+                <span className="hub-game-icon">✈️</span>
+              </div>
+              <div className="hub-game-details">
+                <h3 className="hub-game-title">SEND-101</h3>
+                <p className="hub-game-desc">اللعبة الحماسية لإحراج أصدقائك بجهات الاتصال! تحدى أصحابك في أحكام تواصل محرجة.</p>
+                <span className="hub-game-badge active">جاهزة للعب 🚀</span>
+              </div>
+            </div>
+
+            {/* Locked Game 2: Truth or Dare */}
+            <div className="hub-game-card locked-game">
+              <div className="hub-game-icon-container">
+                <span className="hub-game-icon">🔥</span>
+              </div>
+              <div className="hub-game-details">
+                <h3 className="hub-game-title">حقيقة أم جرأة</h3>
+                <p className="hub-game-desc">لعبة الأسئلة والأحكام الكلاسيكية بأسلوب جديد تماماً وتحديات عصرية.</p>
+                <span className="hub-game-badge locked">قريباً 🔒</span>
+              </div>
+            </div>
+
+            {/* Locked Game 3: Mafia */}
+            <div className="hub-game-card locked-game">
+              <div className="hub-game-icon-container">
+                <span className="hub-game-icon">🕵️</span>
+              </div>
+              <div className="hub-game-details">
+                <h3 className="hub-game-title">المافيا الغامضة</h3>
+                <p className="hub-game-desc">لعبة الذكاء والشك والخدع. اعثر على أعضاء المافيا قبل أن يقضوا على المدينة!</p>
+                <span className="hub-game-badge locked">قريباً 🔒</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 1. WELCOME SCREEN: Select Mode (Inside SEND-101) */}
+      {activeGame === 'send-101' && mode === 'select' && (
         <div className="glass-panel">
           <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', fontWeight: 800 }}>اختر طريقة اللعب</h2>
           
@@ -1262,6 +1314,10 @@ export default function App() {
               اعمل غرفة مع أصحابك. كل لاعب يدخل من موبايله بكود الغرفة، ونفذوا الأحكام مع بعض لايف!
             </div>
           </div>
+
+          <button className="btn btn-outline" style={{ width: '100%', marginTop: '1.5rem' }} onClick={() => { playSound('click'); setActiveGame(null); }}>
+            ↩️ العودة لمنصة الألعاب
+          </button>
         </div>
       )}
 

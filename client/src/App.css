@@ -962,5 +962,119 @@ label {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Hub Screen Bento & Grid Styles */
+.hub-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.hub-game-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  padding: 1.25rem;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  direction: rtl;
+  text-align: right;
+}
+
+.hub-game-card.active-game:hover {
+  transform: translateY(-3px);
+  border-color: var(--primary-glow);
+  box-shadow: 0 8px 24px rgba(0, 242, 254, 0.15), 0 0 15px rgba(0, 242, 254, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.hub-game-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 2rem;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.active-game .hub-game-icon-container {
+  background: rgba(0, 242, 254, 0.06);
+  border: 1px solid rgba(0, 242, 254, 0.2);
+}
+
+.active-game:hover .hub-game-icon-container {
+  transform: scale(1.05) rotate(12deg);
+  background: rgba(0, 242, 254, 0.1);
+  border-color: var(--primary);
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.2);
+}
+
+.hub-game-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex-grow: 1;
+}
+
+.hub-game-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  margin: 0;
+  color: #fff;
+}
+
+.active-game .hub-game-title {
+  color: var(--primary);
+  text-shadow: 0 0 8px rgba(0, 242, 254, 0.2);
+}
+
+.hub-game-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.hub-game-badge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+  border-radius: 20px;
+  margin-top: 0.25rem;
+}
+
+.hub-game-badge.active {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+/* Locked Game styles */
+.hub-game-card.locked-game {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: grayscale(0.5);
+  background: rgba(0, 0, 0, 0.2);
+  border-style: dashed;
+}
+
+.hub-game-badge.locked {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+
 
 
