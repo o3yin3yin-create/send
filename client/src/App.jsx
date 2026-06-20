@@ -343,6 +343,10 @@ export default function App() {
   const [spyTimer, setSpyTimer] = useState(180);
   const [currentSpyRevealIdx, setCurrentSpyRevealIdx] = useState(0);
   const [isLocationRevealed, setIsLocationRevealed] = useState(false);
+  const [localSpyVoters, setLocalSpyVoters] = useState([]);
+  const [localSpyVoterIdx, setLocalSpyVoterIdx] = useState(0);
+  const [localSpyVotesMap, setLocalSpyVotesMap] = useState({});
+  const [isLocalVoteRevealed, setIsLocalVoteRevealed] = useState(false);
   const [spyAccusedPlayerId, setSpyAccusedPlayerId] = useState('');
   const [spyVotes, setSpyVotes] = useState({});
   const [spyGuessOptionSelected, setSpyGuessOptionSelected] = useState('');
@@ -913,6 +917,47 @@ export default function App() {
         status: 'playing'
       });
       playSound('flip');
+    }
+  };
+
+  const startLocalSpyVoting = (accusedId) => {
+    if (!spyGameState) return;
+    playSound('click');
+    setSpyAccusedPlayerId(accusedId);
+    
+    // Voters: all players except the accused
+    const voters = spyGameState.players.filter(p => p.id !== accusedId);
+    setLocalSpyVoters(voters);
+    setLocalSpyVoterIdx(0);
+    setLocalSpyVotesMap({});
+    setIsLocalVoteRevealed(false);
+    
+    setSpyGameState({
+      ...spyGameState,
+      status: 'voting'
+    });
+  };
+
+  const submitLocalSpyIndividualVote = (isYes) => {
+    playSound('click');
+    const voter = localSpyVoters[localSpyVoterIdx];
+    const updatedVotes = {
+      ...localSpyVotesMap,
+      [voter.id]: isYes
+    };
+    setLocalSpyVotesMap(updatedVotes);
+    
+    if (localSpyVoterIdx < localSpyVoters.length - 1) {
+      // Move to next voter
+      setLocalSpyVoterIdx(localSpyVoterIdx + 1);
+      setIsLocalVoteRevealed(false);
+    } else {
+      // All voters have voted! Calculate result.
+      const yesCount = Object.values(updatedVotes).filter(v => v === true).length;
+      const noCount = Object.values(updatedVotes).filter(v => v === false).length;
+      
+      const isSpyConvicted = yesCount > noCount;
+      handleLocalSpyVoteResult(spyAccusedPlayerId, isSpyConvicted);
     }
   };
 
@@ -2371,11 +2416,7 @@ export default function App() {
                     <button
                       className="btn btn-outline"
                       style={{ flex: 1.5, fontSize: '0.85rem', padding: '0.5rem 0.75rem' }}
-                      onClick={() => {
-                        playSound('click');
-                        setSpyAccusedPlayerId(p.id);
-                        setSpyGameState({ ...spyGameState, status: 'voting' });
-                      }}
+                      onClick={() => startLocalSpyVoting(p.id)}
                     >
                       اتهم اللعيب ده 🚨
                     </button>
@@ -2401,7 +2442,7 @@ export default function App() {
           {spyGameState && spyGameState.status === 'voting' && (
             <div className="glass-panel" style={{ textAlign: 'center' }}>
               <div className="winner-crown" style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🚨</div>
-              <h2 style={{ fontWeight: 850, marginBottom: '1.25rem' }}>تصويت محلي!</h2>
+              <h2 style={{ fontWeight: 850, marginBottom: '1.25rem' }}>تصويت فردي محلي</h2>
 
               <div style={{
                 background: 'rgba(239, 68, 68, 0.1)',
@@ -2416,26 +2457,50 @@ export default function App() {
                 </span>
               </div>
 
-              <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                صوتوا مع بعض في القعدة.. هل تظنوا إن اللعيب ده هو المتغفل؟
-              </p>
-              
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1, padding: '1rem' }}
-                  onClick={() => handleLocalSpyVoteResult(spyAccusedPlayerId, true)}
-                >
-                  نعم، هو المتغفل ✅
-                </button>
-                <button
-                  className="btn btn-outline"
-                  style={{ flex: 1, padding: '1rem' }}
-                  onClick={() => handleLocalSpyVoteResult(spyAccusedPlayerId, false)}
-                >
-                  لا، بريء ❌
-                </button>
-              </div>
+              {localSpyVoters.length > 0 && (
+                <div style={{ margin: '1.5rem 0' }}>
+                  <div className="turn-badge" style={{ display: 'inline-block', marginBottom: '1rem' }}>
+                    دور اللعيب يصوت: {localSpyVoters[localSpyVoterIdx].name}
+                  </div>
+                  
+                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                    ادي الموبايل لـ <strong>{localSpyVoters[localSpyVoterIdx].name}</strong> عشان يصوت في السر.
+                  </p>
+
+                  {!isLocalVoteRevealed ? (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ width: '100%', padding: '1.25rem', fontWeight: 'bold' }}
+                      onClick={() => { playSound('click'); setIsLocalVoteRevealed(true); }}
+                    >
+                      اظهر خيارات التصويت 🔒
+                    </button>
+                  ) : (
+                    <div style={{ animation: 'fadeIn 0.25s ease-out' }}>
+                      <p style={{ fontSize: '1.05rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>
+                        هل تظن إن {spyGameState.players.find(p => p.id === spyAccusedPlayerId)?.name} هو المتغفل؟
+                      </p>
+                      
+                      <div style={{ display: 'flex', gap: '1rem' }}>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ flex: 1, padding: '1rem' }}
+                          onClick={() => submitLocalSpyIndividualVote(true)}
+                        >
+                          نعم، هو المتغفل ✅
+                        </button>
+                        <button
+                          className="btn btn-outline"
+                          style={{ flex: 1, padding: '1rem' }}
+                          onClick={() => submitLocalSpyIndividualVote(false)}
+                        >
+                          لا، بريء ❌
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
