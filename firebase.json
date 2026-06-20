@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "games101",
     "public": "client/dist",
     "ignore": [
       "firebase.json",
