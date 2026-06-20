@@ -920,13 +920,13 @@ export default function App() {
     }
   };
 
-  const startLocalSpyVoting = (accusedId) => {
+  const startLocalSpyVoting = () => {
     if (!spyGameState) return;
     playSound('click');
-    setSpyAccusedPlayerId(accusedId);
+    setSpyAccusedPlayerId('');
     
-    // Voters: all players except the accused
-    const voters = spyGameState.players.filter(p => p.id !== accusedId);
+    // Everyone votes!
+    const voters = spyGameState.players;
     setLocalSpyVoters(voters);
     setLocalSpyVoterIdx(0);
     setLocalSpyVotesMap({});
@@ -938,12 +938,12 @@ export default function App() {
     });
   };
 
-  const submitLocalSpyIndividualVote = (isYes) => {
+  const submitLocalSpyIndividualVote = (chosenPlayerId) => {
     playSound('click');
     const voter = localSpyVoters[localSpyVoterIdx];
     const updatedVotes = {
       ...localSpyVotesMap,
-      [voter.id]: isYes
+      [voter.id]: chosenPlayerId
     };
     setLocalSpyVotesMap(updatedVotes);
     
@@ -952,12 +952,45 @@ export default function App() {
       setLocalSpyVoterIdx(localSpyVoterIdx + 1);
       setIsLocalVoteRevealed(false);
     } else {
-      // All voters have voted! Calculate result.
-      const yesCount = Object.values(updatedVotes).filter(v => v === true).length;
-      const noCount = Object.values(updatedVotes).filter(v => v === false).length;
+      // All voters have voted! Count the votes.
+      const voteCounts = {};
+      spyGameState.players.forEach(p => {
+        voteCounts[p.id] = 0;
+      });
       
-      const isSpyConvicted = yesCount > noCount;
-      handleLocalSpyVoteResult(spyAccusedPlayerId, isSpyConvicted);
+      Object.values(updatedVotes).forEach(targetId => {
+        if (voteCounts[targetId] !== undefined) {
+          voteCounts[targetId]++;
+        }
+      });
+      
+      // Find the maximum votes
+      let maxVotes = -1;
+      let accusedIds = [];
+      
+      Object.entries(voteCounts).forEach(([pid, count]) => {
+        if (count > maxVotes) {
+          maxVotes = count;
+          accusedIds = [pid];
+        } else if (count === maxVotes) {
+          accusedIds.push(pid);
+        }
+      });
+      
+      if (accusedIds.length === 1 && maxVotes > 0) {
+        // Single player got the highest votes!
+        const accusedId = accusedIds[0];
+        setSpyAccusedPlayerId(accusedId);
+        handleLocalSpyVoteResult(accusedId, true);
+      } else {
+        // Tie or zero votes!
+        const tieNames = accusedIds.map(id => spyGameState.players.find(p => p.id === id)?.name).join(' و ');
+        alert(`التصويت خلص بالتعادل (أو بدون أصوات) بين: ${tieNames || 'مفيش'}! مفيش حد اتكشف، ارجعوا للنقاش تاني 🗣️`);
+        setSpyGameState({
+          ...spyGameState,
+          status: 'playing'
+        });
+      }
     }
   };
 
@@ -1795,7 +1828,7 @@ export default function App() {
             ? 'تافه زي هاها شرير زي هيهي' 
             : activeGame === 'el-motagafel' 
               ? 'الكل هيلعب بقلب ميت! 🕵️' 
-              : 'ألعاب قعدات ولمات الصحاب والضحك 🎮'}
+              : ''}
         </div>
       </header>
 
@@ -2405,25 +2438,24 @@ export default function App() {
 
               <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', margin: '1.5rem 0' }}></div>
 
-              <h3 style={{ marginBottom: '1rem', fontWeight: 700 }}>اتهم حد أو أعلن إنك المتغفل:</h3>
+              <button
+                className="btn btn-secondary"
+                style={{ width: '100%', padding: '1.25rem', fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '2rem' }}
+                onClick={startLocalSpyVoting}
+              >
+                🗳️ ابدأ التصويت (كلنا هنصوت بالدور)
+              </button>
+
+              <h3 style={{ marginBottom: '1rem', fontWeight: 700 }}>أعلن إنك المتغفل:</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {spyGameState.players.map(p => (
                   <div key={p.id} style={{ display: 'flex', gap: '0.5rem', width: '100%', alignItems: 'center' }}>
                     <span style={{ flex: 1, textAlign: 'right', fontWeight: 'bold' }}>
                       👤 {p.name}
                     </span>
-                    
                     <button
                       className="btn btn-outline"
-                      style={{ flex: 1.5, fontSize: '0.85rem', padding: '0.5rem 0.75rem' }}
-                      onClick={() => startLocalSpyVoting(p.id)}
-                    >
-                      اتهم اللعيب ده 🚨
-                    </button>
-
-                    <button
-                      className="btn btn-outline"
-                      style={{ flex: 1.5, fontSize: '0.85rem', padding: '0.5rem 0.75rem', borderColor: 'rgba(239, 68, 68, 0.4)', color: 'var(--danger)' }}
+                      style={{ flex: 1, fontSize: '0.85rem', padding: '0.5rem 0.75rem', borderColor: 'rgba(239, 68, 68, 0.4)', color: 'var(--danger)' }}
                       onClick={() => handleLocalSpySelfReveal(p.id)}
                     >
                       أنا المتغفل 🕵️
@@ -2441,21 +2473,12 @@ export default function App() {
           {/* Local Spy Voting Screen */}
           {spyGameState && spyGameState.status === 'voting' && (
             <div className="glass-panel" style={{ textAlign: 'center' }}>
-              <div className="winner-crown" style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🚨</div>
+              <div className="winner-crown" style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🗳️</div>
               <h2 style={{ fontWeight: 850, marginBottom: '1.25rem' }}>تصويت فردي محلي</h2>
 
-              <div style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.2)',
-                padding: '1.25rem',
-                borderRadius: '16px',
-                marginBottom: '1.5rem'
-              }}>
-                <span style={{ fontSize: '0.95rem' }}>اللعيب المتهم هو: </span>
-                <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--danger)' }}>
-                  {spyGameState.players.find(p => p.id === spyAccusedPlayerId)?.name}
-                </span>
-              </div>
+              <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                كل لعيب هيختار سراً مين اللي شاكك فيه إنه المتغفل.
+              </p>
 
               {localSpyVoters.length > 0 && (
                 <div style={{ margin: '1.5rem 0' }}>
@@ -2464,7 +2487,7 @@ export default function App() {
                   </div>
                   
                   <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                    ادي الموبايل لـ <strong>{localSpyVoters[localSpyVoterIdx].name}</strong> عشان يصوت في السر.
+                    ادي الموبايل لـ <strong>{localSpyVoters[localSpyVoterIdx].name}</strong> عشان يرشح المتهم سراً.
                   </p>
 
                   {!isLocalVoteRevealed ? (
@@ -2473,29 +2496,30 @@ export default function App() {
                       style={{ width: '100%', padding: '1.25rem', fontWeight: 'bold' }}
                       onClick={() => { playSound('click'); setIsLocalVoteRevealed(true); }}
                     >
-                      اظهر خيارات التصويت 🔒
+                      اظهر ورقة الترشيح 🔒
                     </button>
                   ) : (
                     <div style={{ animation: 'fadeIn 0.25s ease-out' }}>
                       <p style={{ fontSize: '1.05rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>
-                        هل تظن إن {spyGameState.players.find(p => p.id === spyAccusedPlayerId)?.name} هو المتغفل؟
+                        مين شاكك إنه المتغفل؟
                       </p>
                       
-                      <div style={{ display: 'flex', gap: '1rem' }}>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ flex: 1, padding: '1rem' }}
-                          onClick={() => submitLocalSpyIndividualVote(true)}
-                        >
-                          نعم، هو المتغفل ✅
-                        </button>
-                        <button
-                          className="btn btn-outline"
-                          style={{ flex: 1, padding: '1rem' }}
-                          onClick={() => submitLocalSpyIndividualVote(false)}
-                        >
-                          لا، بريء ❌
-                        </button>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, 1fr)',
+                        gap: '0.75rem',
+                        marginBottom: '1.5rem'
+                      }}>
+                        {spyGameState.players.map(p => (
+                          <button
+                            key={p.id}
+                            className="btn btn-outline"
+                            style={{ fontSize: '0.95rem', padding: '0.75rem 0.5rem' }}
+                            onClick={() => submitLocalSpyIndividualVote(p.id)}
+                          >
+                            👤 {p.name}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   )}
