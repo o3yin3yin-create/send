@@ -1765,7 +1765,7 @@ export default function App() {
       <header>
         <div className="logo-container">
           <span className="logo-text">
-            {activeGame === 'send-101' ? 'SEND-101' : activeGame === 'el-motagafel' ? 'المتغفل' : '101-GAMES'}
+            {activeGame === 'send-101' ? 'SEND-101' : activeGame === 'el-motagafel' ? 'Blind Spy' : '101-GAMES'}
           </span>
         </div>
         <div className="subtitle">
@@ -1822,7 +1822,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Game 2: El-Motagafel */}
+            {/* Game 2: Blind Spy */}
             <div className="hub-game-card active-game" onClick={() => {
               playSound('click');
               setActiveGame('el-motagafel');
@@ -1832,18 +1832,18 @@ export default function App() {
                 <span className="hub-game-icon">🕵️</span>
               </div>
               <div className="hub-game-details">
-                <h3 className="hub-game-title">المتغفل</h3>
+                <h3 className="hub-game-title">Blind Spy</h3>
                 <span className="hub-game-badge active">ادخل العب 🚀</span>
               </div>
             </div>
 
-            {/* Locked Game 3: Mafia */}
+            {/* Locked Game 3: 5 Second Rule */}
             <div className="hub-game-card locked-game">
               <div className="hub-game-icon-container">
-                <span className="hub-game-icon">🤫</span>
+                <span className="hub-game-icon">⏱️</span>
               </div>
               <div className="hub-game-details">
-                <h3 className="hub-game-title">المافيا الغامضة</h3>
+                <h3 className="hub-game-title">5 Second Rule</h3>
                 <span className="hub-game-badge locked">جاي في السكة 🔒</span>
               </div>
             </div>
@@ -1892,7 +1892,7 @@ export default function App() {
       {/* 1. WELCOME SCREEN: Select Mode (Inside El-Motagafel) */}
       {activeGame === 'el-motagafel' && mode === 'select' && (
         <div className="glass-panel">
-          <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', fontWeight: 800 }}>المتغفل 🕵️</h2>
+          <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', fontWeight: 800 }}>Blind Spy 🕵️</h2>
           <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
             لعبة التناقض التدريجي.. مين المتغفل اللي بيدافع عن مكانه وهو أصلاً مش فيه؟
           </p>
@@ -2257,6 +2257,300 @@ export default function App() {
 
               <button className="btn btn-primary" style={{ width: '100%', marginTop: '2rem' }} onClick={resetLocalGame}>
                 نلعب تاني 🔄
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* 2B. LOCAL SPY GAME SCREENS */}
+      {mode === 'local' && activeGame === 'el-motagafel' && (
+        <>
+          {/* Lobby Setup */}
+          {!spyGameState && (
+            <div className="glass-panel">
+              <h2 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>جهز اللاعيبين - Blind Spy 🕵️</h2>
+              
+              <div className="form-group">
+                <label>ضيف لاعيبة (من 3 لـ 10 لاعيبة):</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    className="text-input"
+                    style={{ flex: 1 }}
+                    placeholder="اسم اللعيب"
+                    value={newPlayerName}
+                    onChange={(e) => setNewPlayerName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addLocalPlayer()}
+                  />
+                  <button className="btn btn-primary" onClick={addLocalPlayer}>ضيف</button>
+                </div>
+              </div>
+
+              <div style={{ margin: '1rem 0' }}>
+                {localPlayers.map((name, index) => (
+                  <div key={index} className="lobby-player-row" style={{ marginBottom: '0.5rem' }}>
+                    <span>{name}</span>
+                    <button
+                      className="privacy-toggle"
+                      style={{ color: 'var(--danger)' }}
+                      onClick={() => removeLocalPlayer(index)}
+                    >
+                      ❌
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => { playSound('click'); setMode('select'); }}>رجوع</button>
+                <button
+                  className={`btn btn-secondary ${localPlayers.length < 3 ? 'btn-disabled' : ''}`}
+                  style={{ flex: 2 }}
+                  onClick={startSpyLocalSetup}
+                  disabled={localPlayers.length < 3}
+                >
+                  ابدأ الجيم 🎮
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Reveal Screen */}
+          {spyGameState && spyGameState.status === 'reveal' && (
+            <div className="glass-panel" style={{ textAlign: 'center' }}>
+              <h2 style={{ marginBottom: '1rem', fontWeight: 800 }}>الكشف السري 🕵️</h2>
+              
+              <div className="turn-badge" style={{ display: 'inline-block', marginBottom: '1.5rem' }}>
+                دور اللعيب: {spyGameState.players[currentSpyRevealIdx].name}
+              </div>
+
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '2rem' }}>
+                ادي الموبايل لـ <strong>{spyGameState.players[currentSpyRevealIdx].name}</strong>. 
+                ودوس على الزرار عشان تشوف مكانك السري من غير ما حد جنبك يلمحه.
+              </p>
+
+              {!isLocationRevealed ? (
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: '100%', padding: '1.5rem', fontSize: '1.1rem', fontWeight: 'bold' }}
+                  onClick={() => { playSound('flip'); setIsLocationRevealed(true); }}
+                >
+                  اظهر مكاني السري 👁️
+                </button>
+              ) : (
+                <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                  <div className="card-face card-front" style={{ margin: '0 auto 2rem auto', height: 'auto', padding: '2rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--primary)', marginBottom: '0.5rem' }}>المكان السري بتاعك هو:</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 800 }}>{spyGameState.players[currentSpyRevealIdx].location}</div>
+                  </div>
+
+                  <button
+                    className="btn btn-primary"
+                    style={{ width: '100%', marginBottom: '1.5rem' }}
+                    onClick={revealSpyLocationNext}
+                  >
+                    {currentSpyRevealIdx < spyGameState.players.length - 1 ? 'خلاص عرفت (ودّي للمنافس الجاي) 🔒' : 'خلاص عرفت (ابدأ الجيم) 🚀'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Active Discussion */}
+          {spyGameState && spyGameState.status === 'playing' && (
+            <div className="glass-panel" style={{ textAlign: 'center' }}>
+              <h2 style={{ fontWeight: 800, marginBottom: '0.5rem' }}>وقت النقاش والأسئلة 🗣️</h2>
+              
+              <div style={{
+                fontSize: '3.5rem',
+                fontWeight: 900,
+                fontFamily: 'var(--font-english)',
+                color: spyTimer < 30 ? 'var(--danger)' : 'var(--primary)',
+                margin: '1rem 0 1.5rem 0',
+                textShadow: '0 0 15px rgba(234, 179, 8, 0.2)'
+              }}>
+                {Math.floor(spyTimer / 60)}:{String(spyTimer % 60).padStart(2, '0')}
+              </div>
+
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+                اسألوا بعض أسئلة ذكية عشان تكشفوا مين المتغفل من غير ما توضحوا اسم مكانكم الصح.
+              </p>
+
+              <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', margin: '1.5rem 0' }}></div>
+
+              <h3 style={{ marginBottom: '1rem', fontWeight: 700 }}>اتهم حد أو أعلن إنك المتغفل:</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {spyGameState.players.map(p => (
+                  <div key={p.id} style={{ display: 'flex', gap: '0.5rem', width: '100%', alignItems: 'center' }}>
+                    <span style={{ flex: 1, textAlign: 'right', fontWeight: 'bold' }}>
+                      👤 {p.name}
+                    </span>
+                    
+                    <button
+                      className="btn btn-outline"
+                      style={{ flex: 1.5, fontSize: '0.85rem', padding: '0.5rem 0.75rem' }}
+                      onClick={() => {
+                        playSound('click');
+                        setSpyAccusedPlayerId(p.id);
+                        setSpyGameState({ ...spyGameState, status: 'voting' });
+                      }}
+                    >
+                      اتهم اللعيب ده 🚨
+                    </button>
+
+                    <button
+                      className="btn btn-outline"
+                      style={{ flex: 1.5, fontSize: '0.85rem', padding: '0.5rem 0.75rem', borderColor: 'rgba(239, 68, 68, 0.4)', color: 'var(--danger)' }}
+                      onClick={() => handleLocalSpySelfReveal(p.id)}
+                    >
+                      أنا المتغفل 🕵️
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button className="btn btn-outline" style={{ width: '100%', marginTop: '2rem' }} onClick={resetSpyLocalGame}>
+                إنهاء الجيم والرجوع للرئيسية 🏠
+              </button>
+            </div>
+          )}
+
+          {/* Local Spy Voting Screen */}
+          {spyGameState && spyGameState.status === 'voting' && (
+            <div className="glass-panel" style={{ textAlign: 'center' }}>
+              <div className="winner-crown" style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🚨</div>
+              <h2 style={{ fontWeight: 850, marginBottom: '1.25rem' }}>تصويت محلي!</h2>
+
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                padding: '1.25rem',
+                borderRadius: '16px',
+                marginBottom: '1.5rem'
+              }}>
+                <span style={{ fontSize: '0.95rem' }}>اللعيب المتهم هو: </span>
+                <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--danger)' }}>
+                  {spyGameState.players.find(p => p.id === spyAccusedPlayerId)?.name}
+                </span>
+              </div>
+
+              <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                صوتوا مع بعض في القعدة.. هل تظنوا إن اللعيب ده هو المتغفل؟
+              </p>
+              
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ flex: 1, padding: '1rem' }}
+                  onClick={() => handleLocalSpyVoteResult(spyAccusedPlayerId, true)}
+                >
+                  نعم، هو المتغفل ✅
+                </button>
+                <button
+                  className="btn btn-outline"
+                  style={{ flex: 1, padding: '1rem' }}
+                  onClick={() => handleLocalSpyVoteResult(spyAccusedPlayerId, false)}
+                >
+                  لا، بريء ❌
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Local Guess Screen */}
+          {spyGameState && spyGameState.status === 'guessing' && (
+            <div className="glass-panel" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🕵️</div>
+              <h2 style={{ fontWeight: 850, marginBottom: '0.5rem' }}>تخمين مكان الأغلبية</h2>
+              
+              <div className="turn-badge" style={{ display: 'inline-block', marginBottom: '1.5rem' }}>
+                دور المتغفل: {spyGameState.players.find(p => p.id === spyGameState.accusedPlayerId || p.isSpy)?.name}
+              </div>
+
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+                أنت المتغفل! قدامك فرصة واحدة عشان تخمن مكان الأغلبية الصح من بين الـ 10 خيارات دول. لو خمنت صح هتكسب الجيم!
+              </p>
+
+              <div className="guess-options-grid" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '0.75rem',
+                marginBottom: '2rem'
+              }}>
+                {(spyGuessOptions || []).map((opt, idx) => (
+                  <button
+                    key={idx}
+                    className={`btn ${spyGuessOptionSelected === opt ? 'btn-secondary' : 'btn-outline'}`}
+                    style={{ fontSize: '0.9rem', padding: '0.75rem 0.5rem' }}
+                    onClick={() => { playSound('click'); setSpyGuessOptionSelected(opt); }}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                className={`btn btn-primary ${!spyGuessOptionSelected ? 'btn-disabled' : ''}`}
+                style={{ width: '100%' }}
+                onClick={() => { submitLocalSpyGuess(spyGuessOptionSelected); setSpyGuessOptionSelected(''); }}
+                disabled={!spyGuessOptionSelected}
+              >
+                أكد التخمين النهائي 🧐
+              </button>
+            </div>
+          )}
+
+          {/* Local Spy Game Over Screen */}
+          {spyGameState && spyGameState.status === 'game_over' && (
+            <div className="glass-panel" style={{ textAlign: 'center' }}>
+              <ConfettiEffect />
+              <div className="winner-box">
+                <div className="winner-crown">👑</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>الفايز بالجيم هو 👑</div>
+                <div className="winner-name">{spyGameState.winner?.name}</div>
+              </div>
+
+              <div style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid var(--border-light)',
+                padding: '1.25rem',
+                borderRadius: '16px',
+                margin: '1.5rem 0',
+                lineHeight: '1.6',
+                textAlign: 'right'
+              }}>
+                <strong>السبب: </strong> {spyGameState.reason}
+              </div>
+
+              <h3 style={{ margin: '1.5rem 0 1rem 0', fontWeight: 800, color: 'var(--danger)' }}>عقابات اللعيبة الخسرانين 💀</h3>
+              <div className="punishment-box">
+                {spyGameState.players.map(p => {
+                  const isWinnerGroup = spyGameState.winner?.id === 'group';
+                  const isPlayerSpy = p.isSpy;
+                  
+                  if (isWinnerGroup && !isPlayerSpy) return null;
+                  if (!isWinnerGroup && isPlayerSpy) return null;
+
+                  const seedVal = p.name.charCodeAt(0) + (p.name.charCodeAt(p.name.length - 1) || 0);
+                  const punIndex = seedVal % allEmergencyCards.length;
+                  const ptext = allEmergencyCards[punIndex].text;
+
+                  return (
+                    <div key={p.id} className="punishment-player-card">
+                      <div style={{ fontWeight: 'bold', textAlign: 'right' }}>{p.name} (عقابه):</div>
+                      <div className="punishment-text" style={{ textAlign: 'right' }}>{ptext}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button className="btn btn-primary" style={{ width: '100%', marginTop: '2rem' }} onClick={resetSpyLocalGame}>
+                نلعب تاني 🔄
+              </button>
+
+              <button className="btn btn-outline" style={{ width: '100%', marginTop: '1rem' }} onClick={resetSpyLocalGame}>
+                ارجع لبوابة الألعاب 🏠
               </button>
             </div>
           )}
@@ -2722,7 +3016,7 @@ export default function App() {
               {/* Online Spy Lobby Screen */}
               {roomState.status === 'lobby' && (
                 <div className="glass-panel">
-                  <h2 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>أوضة الانتظار - المتغفل 🕵️</h2>
+                  <h2 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>أوضة الانتظار - Blind Spy 🕵️</h2>
                   
                   <div className="room-code-display">
                     <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>كود الأوضة (دوس للنسخ):</span>
@@ -3181,7 +3475,7 @@ export default function App() {
         <div className="dev-modal-overlay" onClick={() => setShowHowToPlaySpy(false)}>
           <div className="how-to-play-modal-content" onClick={(e) => e.stopPropagation()} style={{ direction: 'rtl' }}>
             <button className="dev-modal-close" onClick={() => setShowHowToPlaySpy(false)}>×</button>
-            <h3>إزاي تلعب المتغفل؟ 🕵️</h3>
+            <h3>إزاي تلعب Blind Spy؟ 🕵️</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: '1.4', textAlign: 'center' }}>
               لعبة الذكاء والتناقض النفسي. دي القواعد بالمصري ومن غير فزلكة:
             </p>
