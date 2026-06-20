@@ -52,6 +52,14 @@ const decryptRole = (encryptedStr, key) => {
   }
 };
 
+const decryptRoleWithFallback = (encryptedStr, tempKey, playerId) => {
+  let decrypted = decryptRole(encryptedStr, tempKey);
+  if (!decrypted && playerId) {
+    decrypted = decryptRole(encryptedStr, playerId);
+  }
+  return decrypted;
+};
+
 const playSound = (type) => {
   try {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -354,7 +362,7 @@ export default function App() {
     if (!roomState || !roomState.players) return null;
     const me = roomState.players.find(p => p.playerId === myPlayerId);
     if (!me || !me.encryptedRole) return null;
-    return decryptRole(me.encryptedRole, myTempKey);
+    return decryptRoleWithFallback(me.encryptedRole, myTempKey, myPlayerId);
   }, [roomState, myPlayerId, myTempKey]);
 
   // Subscribe to room updates in Firestore
@@ -373,7 +381,7 @@ export default function App() {
           if (updatedState.spyGuess && updatedState.status !== 'game_over') {
             const me = updatedState.players.find(p => p.playerId === myPlayerId);
             if (me && me.encryptedRole) {
-              const myRole = decryptRole(me.encryptedRole, myTempKey);
+              const myRole = decryptRoleWithFallback(me.encryptedRole, myTempKey, myPlayerId);
               if (myRole && !myRole.isSpy) {
                 const isCorrect = updatedState.spyGuess === myRole.location;
                 const spyPlayer = updatedState.players.find(p => p.playerId === updatedState.spyPlayerId);
@@ -497,38 +505,7 @@ export default function App() {
     }
   }, [mode, roomState?.status, roomState?.players, onlineRoomCode, myPlayerId, myTempKey]);
 
-  // --- SPY GAME TIMER COUNTDOWN ---
-  useEffect(() => {
-    let interval = null;
-    if (activeGame === 'el-motagafel') {
-      if (mode === 'local' && spyGameState && spyGameState.status === 'playing') {
-        if (spyTimer > 0) {
-          interval = setInterval(() => {
-            setSpyTimer(t => t - 1);
-          }, 1000);
-        }
-      } else if (mode === 'online' && roomState && roomState.status === 'playing') {
-        if (spyTimer > 0) {
-          interval = setInterval(() => {
-            setSpyTimer(t => t - 1);
-          }, 1000);
-        }
-      }
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [activeGame, mode, spyGameState, roomState, spyTimer]);
-
-  useEffect(() => {
-    if (activeGame === 'el-motagafel' && mode === 'online' && roomState) {
-      if (roomState.status === 'playing' && roomState.gameStartedAt) {
-        const elapsed = Math.floor((Date.now() - roomState.gameStartedAt) / 1000);
-        const remaining = Math.max(0, 180 - elapsed);
-        setSpyTimer(remaining);
-      }
-    }
-  }, [roomState?.status, roomState?.gameStartedAt, activeGame, mode]);
+  // --- SPY GAME TIMER COUNTDOWN (Disabled: Open time discussion) ---
 
   // --- LOCAL GAME LOGIC ACTIONS ---
   
@@ -2330,29 +2307,34 @@ export default function App() {
                 ودوس على الزرار عشان تشوف مكانك السري من غير ما حد جنبك يلمحه.
               </p>
 
-              {!isLocationRevealed ? (
-                <button
-                  className="btn btn-secondary"
-                  style={{ width: '100%', padding: '1.5rem', fontSize: '1.1rem', fontWeight: 'bold' }}
-                  onClick={() => { playSound('flip'); setIsLocationRevealed(true); }}
-                >
-                  اظهر مكاني السري 👁️
-                </button>
-              ) : (
-                <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                  <div className="card-face card-front" style={{ margin: '0 auto 2rem auto', height: 'auto', padding: '2rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--primary)', marginBottom: '0.5rem' }}>المكان السري بتاعك هو:</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800 }}>{spyGameState.players[currentSpyRevealIdx].location}</div>
+              <div className="card-scene" onClick={() => {
+                if (!isLocationRevealed) {
+                  playSound('flip');
+                  setIsLocationRevealed(true);
+                }
+              }} style={{ margin: '0 auto 2rem auto', cursor: !isLocationRevealed ? 'pointer' : 'default' }}>
+                <div className={`flip-card ${isLocationRevealed ? 'is-flipped' : ''}`}>
+                  <div className="card-face card-back" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                    <div className="card-back-pattern">Blind Spy</div>
+                    <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', marginTop: '1rem' }}>دوس عشان تشوف مكانك 👁️</span>
                   </div>
-
-                  <button
-                    className="btn btn-primary"
-                    style={{ width: '100%', marginBottom: '1.5rem' }}
-                    onClick={revealSpyLocationNext}
-                  >
-                    {currentSpyRevealIdx < spyGameState.players.length - 1 ? 'خلاص عرفت (ودّي للمنافس الجاي) 🔒' : 'خلاص عرفت (ابدأ الجيم) 🚀'}
-                  </button>
+                  <div className="card-front card-face" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '2rem 1rem' }}>
+                    <div className="card-front-label" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>مكانك السري هو:</div>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', textShadow: '0 0 10px rgba(255,255,255,0.1)' }}>
+                      {spyGameState.players[currentSpyRevealIdx].location}
+                    </div>
+                  </div>
                 </div>
+              </div>
+
+              {isLocationRevealed && (
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%', marginBottom: '1.5rem', animation: 'fadeIn 0.3s ease-out' }}
+                  onClick={revealSpyLocationNext}
+                >
+                  {currentSpyRevealIdx < spyGameState.players.length - 1 ? 'خلاص عرفت (ودّي للمنافس الجاي) 🔒' : 'خلاص عرفت (ابدأ الجيم) 🚀'}
+                </button>
               )}
             </div>
           )}
@@ -2363,14 +2345,13 @@ export default function App() {
               <h2 style={{ fontWeight: 800, marginBottom: '0.5rem' }}>وقت النقاش والأسئلة 🗣️</h2>
               
               <div style={{
-                fontSize: '3.5rem',
-                fontWeight: 900,
-                fontFamily: 'var(--font-english)',
-                color: spyTimer < 30 ? 'var(--danger)' : 'var(--primary)',
-                margin: '1rem 0 1.5rem 0',
-                textShadow: '0 0 15px rgba(234, 179, 8, 0.2)'
+                fontSize: '1.8rem',
+                fontWeight: 800,
+                color: 'var(--primary)',
+                margin: '1.5rem 0',
+                textShadow: '0 0 10px rgba(234, 179, 8, 0.1)'
               }}>
-                {Math.floor(spyTimer / 60)}:{String(spyTimer % 60).padStart(2, '0')}
+                💬 وقت مفتوح للنقاش.. اتكلموا براحتكم!
               </div>
 
               <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
@@ -3073,21 +3054,28 @@ export default function App() {
                     دوس على الكارت عشان تعرف مكانك السري من غير ما حد واقف جنبك يلمحه.
                   </p>
 
-                  {!isLocationRevealed ? (
-                    <button
-                      className="btn btn-secondary"
-                      style={{ width: '100%', padding: '1.5rem', fontSize: '1.1rem', fontWeight: 'bold' }}
-                      onClick={() => { playSound('flip'); setIsLocationRevealed(true); }}
-                    >
-                      اظهر مكاني السري 👁️
-                    </button>
-                  ) : (
-                    <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                      <div className="card-face card-front" style={{ margin: '0 auto 2rem auto', height: 'auto', padding: '2rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--primary)', marginBottom: '0.5rem' }}>المكان السري بتاعك هو:</div>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 800 }}>{myDecryptedRole?.location}</div>
+                  <div className="card-scene" onClick={() => {
+                    if (!isLocationRevealed) {
+                      playSound('flip');
+                      setIsLocationRevealed(true);
+                    }
+                  }} style={{ margin: '0 auto 2rem auto', cursor: !isLocationRevealed ? 'pointer' : 'default' }}>
+                    <div className={`flip-card ${isLocationRevealed ? 'is-flipped' : ''}`}>
+                      <div className="card-face card-back" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                        <div className="card-back-pattern">Blind Spy</div>
+                        <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', marginTop: '1rem' }}>دوس عشان تشوف مكانك 👁️</span>
                       </div>
+                      <div className="card-front card-face" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '2rem 1rem' }}>
+                        <div className="card-front-label" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>مكانك السري هو:</div>
+                        <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', textShadow: '0 0 10px rgba(255,255,255,0.1)' }}>
+                          {myDecryptedRole?.location || 'جاري التحميل...'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
+                  {isLocationRevealed && (
+                    <div style={{ animation: 'fadeIn 0.3s ease-out', width: '100%' }}>
                       {playersList.find(p => p.playerId === myPlayerId)?.isReady ? (
                         <div style={{
                           background: 'rgba(34, 197, 94, 0.1)',
@@ -3203,14 +3191,13 @@ export default function App() {
                       <h2 style={{ fontWeight: 800, marginBottom: '0.5rem' }}>وقت النقاش والأسئلة 🗣️</h2>
                       
                       <div style={{
-                        fontSize: '3.5rem',
-                        fontWeight: 900,
-                        fontFamily: 'var(--font-english)',
-                        color: spyTimer < 30 ? 'var(--danger)' : 'var(--primary)',
-                        margin: '1rem 0 1.5rem 0',
-                        textShadow: '0 0 15px rgba(234, 179, 8, 0.2)'
+                        fontSize: '1.8rem',
+                        fontWeight: 800,
+                        color: 'var(--primary)',
+                        margin: '1.5rem 0',
+                        textShadow: '0 0 10px rgba(234, 179, 8, 0.1)'
                       }}>
-                        {Math.floor(spyTimer / 60)}:{String(spyTimer % 60).padStart(2, '0')}
+                        💬 وقت مفتوح للنقاش.. اتكلموا براحتكم!
                       </div>
 
                       <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
