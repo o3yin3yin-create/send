@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import { doc, setDoc, updateDoc, onSnapshot, runTransaction } from 'firebase/firestore';
-import { categories as allCategories, actionCards as allActionCards, emergencyCards as allEmergencyCards } from './localGameData';
+import { categories as allCategories, actionCards as allActionCards, emergencyCards as allEmergencyCards, spyLocations as allSpyLocations } from './localGameData';
 import './App.css';
 
 // Helper to shuffle
@@ -25,6 +25,32 @@ function drawCards(deck, count, originalDeck) {
   }
   return drawn;
 }
+
+const xorEncryptDecrypt = (input, key) => {
+  let output = '';
+  for (let i = 0; i < input.length; i++) {
+    const charCode = input.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+    output += String.fromCharCode(charCode);
+  }
+  return output;
+};
+
+const encryptRole = (roleObj, key) => {
+  const jsonStr = JSON.stringify(roleObj);
+  const encrypted = xorEncryptDecrypt(jsonStr, key);
+  return btoa(unescape(encodeURIComponent(encrypted)));
+};
+
+const decryptRole = (encryptedStr, key) => {
+  try {
+    const encrypted = decodeURIComponent(escape(atob(encryptedStr)));
+    const jsonStr = xorEncryptDecrypt(encrypted, key);
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error("Decryption failed", e);
+    return null;
+  }
+};
 
 const playSound = (type) => {
   try {
@@ -247,6 +273,15 @@ export default function App() {
     return pid;
   });
 
+  const [myTempKey] = useState(() => {
+    let key = localStorage.getItem('send_temp_key');
+    if (!key) {
+      key = Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('send_temp_key', key);
+    }
+    return key;
+  });
+
   const [onlineRoomCode, setOnlineRoomCode] = useState(() => localStorage.getItem('send_room_code') || '');
 
   const handleRestoreSession = () => {
@@ -293,6 +328,17 @@ export default function App() {
   const [showDevModal, setShowDevModal] = useState(false);
   const [showPhones, setShowPhones] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  
+  // --- SPY GAME STATE VARIABLES ---
+  const [spyGameState, setSpyGameState] = useState(null);
+  const [showHowToPlaySpy, setShowHowToPlaySpy] = useState(false);
+  const [spyTimer, setSpyTimer] = useState(180);
+  const [currentSpyRevealIdx, setCurrentSpyRevealIdx] = useState(0);
+  const [isLocationRevealed, setIsLocationRevealed] = useState(false);
+  const [spyAccusedPlayerId, setSpyAccusedPlayerId] = useState('');
+  const [spyVotes, setSpyVotes] = useState({});
+  const [spyGuessOptionSelected, setSpyGuessOptionSelected] = useState('');
+  const [spyGuessOptions, setSpyGuessOptions] = useState([]);
 
   // Computed players list to track online/disconnected status dynamically
   const playersList = React.useMemo(() => {
@@ -304,6 +350,13 @@ export default function App() {
     }));
   }, [roomState, myPlayerId]);
 
+  const myDecryptedRole = React.useMemo(() => {
+    if (!roomState || !roomState.players) return null;
+    const me = roomState.players.find(p => p.playerId === myPlayerId);
+    if (!me || !me.encryptedRole) return null;
+    return decryptRole(me.encryptedRole, myTempKey);
+  }, [roomState, myPlayerId, myTempKey]);
+
   // Subscribe to room updates in Firestore
   useEffect(() => {
     if (mode === 'online' && onlineRoomCode) {
@@ -312,6 +365,43 @@ export default function App() {
       const unsubscribe = onSnapshot(roomRef, (docSnap) => {
         if (docSnap.exists()) {
           const updatedState = docSnap.data();
+          
+          if (updatedState.gameType && updatedState.gameType !== activeGame) {
+            setActiveGame(updatedState.gameType);
+          }
+
+          if (updatedState.spyGuess && updatedState.status !== 'game_over') {
+            const me = updatedState.players.find(p => p.playerId === myPlayerId);
+            if (me && me.encryptedRole) {
+              const myRole = decryptRole(me.encryptedRole, myTempKey);
+              if (myRole && !myRole.isSpy) {
+                const isCorrect = updatedState.spyGuess === myRole.location;
+                const spyPlayer = updatedState.players.find(p => p.playerId === updatedState.spyPlayerId);
+                runTransaction(db, async (transaction) => {
+                  const sfDoc = await transaction.get(roomRef);
+                  if (!sfDoc.exists()) return;
+                  const data = sfDoc.data();
+                  if (data.spyGuess && data.status !== 'game_over') {
+                    if (isCorrect) {
+                      transaction.update(roomRef, {
+                        status: 'game_over',
+                        spyGuess: null,
+                        winner: spyPlayer ? { id: spyPlayer.playerId, name: spyPlayer.name } : { id: 'spy', name: 'المتغفل' },
+                        reason: `المتغفل عرف مكان الأغلبية صح وهو (${myRole.location})! المتغفل كسب الجيم.`
+                      });
+                    } else {
+                      transaction.update(roomRef, {
+                        status: 'game_over',
+                        spyGuess: null,
+                        winner: { id: 'group', name: 'الأغلبية (الجروب)' },
+                        reason: `المتغفل خمن غلط (${data.spyGuess})! مكان الأغلبية كان (${myRole.location}). الأغلبية كسبت الجيم.`
+                      });
+                    }
+                  }
+                });
+              }
+            }
+          }
           
           setRoomState((prev) => {
             if (prev) {
@@ -352,7 +442,7 @@ export default function App() {
 
       return () => unsubscribe();
     }
-  }, [mode, onlineRoomCode]);
+  }, [mode, onlineRoomCode, activeGame, myPlayerId, myTempKey]);
 
   // Heartbeat to keep connection alive in Firestore
   useEffect(() => {
@@ -382,6 +472,63 @@ export default function App() {
     
     return () => clearInterval(interval);
   }, [mode, onlineRoomCode, roomState]);
+
+  // Ensure tempKey is always present in Firestore players list when room is in lobby
+  useEffect(() => {
+    if (mode === 'online' && roomState && roomState.status === 'lobby' && onlineRoomCode) {
+      const me = roomState.players.find(p => p.playerId === myPlayerId);
+      if (me && !me.tempKey) {
+        const roomRef = doc(db, 'rooms', onlineRoomCode);
+        runTransaction(db, async (transaction) => {
+          const sfDoc = await transaction.get(roomRef);
+          if (!sfDoc.exists()) return;
+          const data = sfDoc.data();
+          if (data.status === 'lobby') {
+            const players = data.players.map(p => {
+              if (p.playerId === myPlayerId) {
+                return { ...p, tempKey: myTempKey };
+              }
+              return p;
+            });
+            transaction.update(roomRef, { players });
+          }
+        });
+      }
+    }
+  }, [mode, roomState?.status, roomState?.players, onlineRoomCode, myPlayerId, myTempKey]);
+
+  // --- SPY GAME TIMER COUNTDOWN ---
+  useEffect(() => {
+    let interval = null;
+    if (activeGame === 'el-motagafel') {
+      if (mode === 'local' && spyGameState && spyGameState.status === 'playing') {
+        if (spyTimer > 0) {
+          interval = setInterval(() => {
+            setSpyTimer(t => t - 1);
+          }, 1000);
+        }
+      } else if (mode === 'online' && roomState && roomState.status === 'playing') {
+        if (spyTimer > 0) {
+          interval = setInterval(() => {
+            setSpyTimer(t => t - 1);
+          }, 1000);
+        }
+      }
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activeGame, mode, spyGameState, roomState, spyTimer]);
+
+  useEffect(() => {
+    if (activeGame === 'el-motagafel' && mode === 'online' && roomState) {
+      if (roomState.status === 'playing' && roomState.gameStartedAt) {
+        const elapsed = Math.floor((Date.now() - roomState.gameStartedAt) / 1000);
+        const remaining = Math.max(0, 180 - elapsed);
+        setSpyTimer(remaining);
+      }
+    }
+  }, [roomState?.status, roomState?.gameStartedAt, activeGame, mode]);
 
   // --- LOCAL GAME LOGIC ACTIONS ---
   
@@ -720,6 +867,411 @@ export default function App() {
     setMode('select');
   };
 
+  // --- SPY LOCAL GAME LOGIC ACTIONS ---
+  
+  const startSpyLocalSetup = () => {
+    playSound('click');
+    if (localPlayers.length < 3) {
+      alert('لازم يكون فيه 3 لعيبة على الأقل عشان تلعبوا.');
+      return;
+    }
+    
+    // Choose location pair
+    const pair = allSpyLocations[Math.floor(Math.random() * allSpyLocations.length)];
+    const isAForMajority = Math.random() > 0.5;
+    const majorityLocation = isAForMajority ? pair.location_A : pair.location_B;
+    const minorityLocation = isAForMajority ? pair.location_B : pair.location_A;
+    
+    // Select a spy
+    const spyIdx = Math.floor(Math.random() * localPlayers.length);
+    
+    const players = localPlayers.map((name, idx) => ({
+      id: Math.random().toString(36).substr(2, 9),
+      name,
+      location: idx === spyIdx ? minorityLocation : majorityLocation,
+      isSpy: idx === spyIdx,
+      score: 0
+    }));
+    
+    // Generate 10 options for the spy to guess
+    const options = new Set();
+    options.add(majorityLocation);
+    while (options.size < 10 && options.size < allSpyLocations.length * 2) {
+      const randomLoc = allSpyLocations[Math.floor(Math.random() * allSpyLocations.length)];
+      const randomName = Math.random() > 0.5 ? randomLoc.location_A : randomLoc.location_B;
+      if (randomName !== majorityLocation) {
+        options.add(randomName);
+      }
+    }
+    setSpyGuessOptions(shuffle(Array.from(options)));
+    
+    setSpyGameState({
+      status: 'reveal', // 'reveal' | 'playing' | 'voting' | 'guessing' | 'game_over'
+      players,
+      selectedPair: pair,
+      spyPlayerId: players[spyIdx].id,
+      majorityLocation,
+      minorityLocation,
+      winner: null,
+      accusedPlayerId: null
+    });
+    
+    setCurrentSpyRevealIdx(0);
+    setIsLocationRevealed(false);
+    setSpyTimer(180);
+    setSpyAccusedPlayerId('');
+    setSpyVotes({});
+    setSpyGuessOptionSelected('');
+  };
+
+  const revealSpyLocationNext = () => {
+    playSound('click');
+    if (!spyGameState) return;
+    if (currentSpyRevealIdx < spyGameState.players.length - 1) {
+      setCurrentSpyRevealIdx(currentSpyRevealIdx + 1);
+      setIsLocationRevealed(false);
+    } else {
+      setSpyGameState({
+        ...spyGameState,
+        status: 'playing'
+      });
+      playSound('flip');
+    }
+  };
+
+  const handleLocalSpyVoteResult = (accusedId, didAccuseSpy) => {
+    playSound('click');
+    if (!spyGameState) return;
+    const accusedPlayer = spyGameState.players.find(p => p.id === accusedId);
+    if (!accusedPlayer) return;
+    
+    if (didAccuseSpy) {
+      // If accused player is indeed the spy
+      if (accusedPlayer.isSpy) {
+        // Spy has one chance to guess
+        setSpyGameState({
+          ...spyGameState,
+          status: 'guessing',
+          accusedPlayerId: accusedId
+        });
+      } else {
+        // Accused innocent player -> Spy wins!
+        const spyPlayer = spyGameState.players.find(p => p.isSpy);
+        setSpyGameState({
+          ...spyGameState,
+          status: 'game_over',
+          winner: spyPlayer,
+          reason: `اتهمتوا اللعيب البريء (${accusedPlayer.name})! المتغفل طلع كسبان.`
+        });
+        playSound('gameover');
+      }
+    } else {
+      // Voting failed, return to discussion
+      setSpyGameState({
+        ...spyGameState,
+        status: 'playing'
+      });
+    }
+  };
+
+  const submitLocalSpyGuess = (guessedLocation) => {
+    playSound('click');
+    if (!spyGameState) return;
+    
+    if (guessedLocation === spyGameState.majorityLocation) {
+      // Spy guessed correctly -> Spy wins!
+      const spyPlayer = spyGameState.players.find(p => p.isSpy);
+      setSpyGameState({
+        ...spyGameState,
+        status: 'game_over',
+        winner: spyPlayer,
+        reason: `المتغفل عرف مكان الأغلبية صح وهو (${spyGameState.majorityLocation})! المتغفل كسب الجيم.`
+      });
+      playSound('gameover');
+    } else {
+      // Spy guessed wrong -> Group wins!
+      setSpyGameState({
+        ...spyGameState,
+        status: 'game_over',
+        winner: { id: 'group', name: 'الأغلبية (الجروب)' },
+        reason: `المتغفل خمن غلط (${guessedLocation})! مكان الأغلبية كان (${spyGameState.majorityLocation}). الأغلبية كسبت الجيم.`
+      });
+      playSound('gameover');
+    }
+  };
+
+  const handleLocalSpySelfReveal = (claimingPlayerId) => {
+    playSound('click');
+    if (!spyGameState) return;
+    const claimingPlayer = spyGameState.players.find(p => p.id === claimingPlayerId);
+    if (!claimingPlayer) return;
+    
+    if (claimingPlayer.isSpy) {
+      // Indeed the spy -> Go to guessing
+      setSpyGameState({
+        ...spyGameState,
+        status: 'guessing',
+        accusedPlayerId: claimingPlayerId
+      });
+    } else {
+      // Not the spy -> Group wins!
+      setSpyGameState({
+        ...spyGameState,
+        status: 'game_over',
+        winner: { id: 'group', name: 'الأغلبية (الجروب)' },
+        reason: `اللعيب (${claimingPlayer.name}) افتكر نفسه المتغفل وهو بريء! الأغلبية كسبت الجيم.`
+      });
+      playSound('gameover');
+    }
+  };
+
+  const resetSpyLocalGame = () => {
+    playSound('click');
+    setSpyGameState(null);
+    setMode('select');
+  };
+
+  // --- SPY ONLINE GAME ACTION EMITS ---
+  const startOnlineSpySetup = async () => {
+    playSound('click');
+    if (!onlineRoomCode || !roomState) return;
+
+    if (roomState.players.length < 3) {
+      alert('لازم يكون فيه 3 لعيبة على الأقل عشان تلعبوا.');
+      return;
+    }
+
+    const pair = allSpyLocations[Math.floor(Math.random() * allSpyLocations.length)];
+    const isAForMajority = Math.random() > 0.5;
+    const majorityLocation = isAForMajority ? pair.location_A : pair.location_B;
+    const minorityLocation = isAForMajority ? pair.location_B : pair.location_A;
+
+    const spyIdx = Math.floor(Math.random() * roomState.players.length);
+    const spyId = roomState.players[spyIdx].playerId;
+
+    const options = new Set();
+    options.add(majorityLocation);
+    while (options.size < 10 && options.size < allSpyLocations.length * 2) {
+      const randomLoc = allSpyLocations[Math.floor(Math.random() * allSpyLocations.length)];
+      const randomName = Math.random() > 0.5 ? randomLoc.location_A : randomLoc.location_B;
+      if (randomName !== majorityLocation) {
+        options.add(randomName);
+      }
+    }
+    const shuffledOptions = shuffle(Array.from(options));
+
+    const updatedPlayers = roomState.players.map((p) => {
+      const isSpy = p.playerId === spyId;
+      const locationVal = isSpy ? minorityLocation : majorityLocation;
+      const rolePayload = { isSpy, location: locationVal };
+      const encryptionKey = p.tempKey || p.playerId;
+      const encryptedRole = encryptRole(rolePayload, encryptionKey);
+
+      const newPlayer = {
+        ...p,
+        encryptedRole,
+        isReady: false
+      };
+      delete newPlayer.tempKey;
+      return newPlayer;
+    });
+
+    const roomRef = doc(db, 'rooms', onlineRoomCode);
+    try {
+      await updateDoc(roomRef, {
+        status: 'reveal',
+        gameType: 'el-motagafel',
+        players: updatedPlayers,
+        spyPlayerId: spyId,
+        spyGuessOptions: shuffledOptions,
+        spyGuess: null,
+        gameStartedAt: null,
+        accusedPlayerId: null,
+        votes: {},
+        votingStatus: 'none',
+        winner: null
+      });
+      console.log("Online spy game setup completed.");
+    } catch (err) {
+      console.error("Error setting up online spy game:", err);
+    }
+  };
+
+  const submitOnlineSpyReady = async () => {
+    playSound('click');
+    if (!onlineRoomCode || !roomState) return;
+
+    const roomRef = doc(db, 'rooms', onlineRoomCode);
+    try {
+      await runTransaction(db, async (transaction) => {
+        const sfDoc = await transaction.get(roomRef);
+        if (!sfDoc.exists()) return;
+
+        const room = sfDoc.data();
+        const updatedPlayers = room.players.map(p => {
+          if (p.playerId === myPlayerId) {
+            return { ...p, isReady: true };
+          }
+          return p;
+        });
+
+        const allReady = updatedPlayers.every(p => p.isReady);
+        const updates = { players: updatedPlayers };
+
+        if (allReady) {
+          updates.status = 'playing';
+          updates.gameStartedAt = Date.now();
+        }
+
+        transaction.update(roomRef, updates);
+      });
+    } catch (err) {
+      console.error("Error setting player ready in online spy game:", err);
+    }
+  };
+
+  const startOnlineSpyVoting = async (accusedId) => {
+    playSound('click');
+    if (!onlineRoomCode || !roomState) return;
+
+    const roomRef = doc(db, 'rooms', onlineRoomCode);
+    try {
+      await updateDoc(roomRef, {
+        accusedPlayerId: accusedId,
+        votingStatus: 'voting',
+        votes: {}
+      });
+    } catch (err) {
+      console.error("Error starting online voting:", err);
+    }
+  };
+
+  const submitOnlineSpyVote = async (voteValue) => {
+    playSound('click');
+    if (!onlineRoomCode || !roomState) return;
+
+    const roomRef = doc(db, 'rooms', onlineRoomCode);
+    try {
+      await runTransaction(db, async (transaction) => {
+        const sfDoc = await transaction.get(roomRef);
+        if (!sfDoc.exists()) return;
+
+        const room = sfDoc.data();
+        const votes = room.votes || {};
+        votes[myPlayerId] = voteValue;
+
+        const voters = room.players.filter(p => p.playerId !== room.accusedPlayerId);
+        const allVoted = voters.every(p => votes[p.playerId] !== undefined);
+
+        const updates = { votes };
+
+        if (allVoted) {
+          const yesVotes = voters.filter(p => votes[p.playerId] === true).length;
+          const noVotes = voters.filter(p => votes[p.playerId] === false).length;
+          
+          if (yesVotes > noVotes) {
+            const accusedPlayer = room.players.find(p => p.playerId === room.accusedPlayerId);
+            const isSpy = room.spyPlayerId === room.accusedPlayerId;
+
+            if (isSpy) {
+              updates.status = 'guessing';
+              updates.votingStatus = 'none';
+            } else {
+              const spyPlayer = room.players.find(p => p.playerId === room.spyPlayerId);
+              updates.status = 'game_over';
+              updates.votingStatus = 'none';
+              updates.winner = spyPlayer ? { id: spyPlayer.playerId, name: spyPlayer.name } : { id: 'spy', name: 'المتغفل' };
+              updates.reason = `اتهمتوا اللعيب البريء (${accusedPlayer ? accusedPlayer.name : 'بريء'})! المتغفل طلع كسبان.`;
+            }
+          } else {
+            updates.votingStatus = 'none';
+            updates.accusedPlayerId = null;
+            updates.votes = {};
+          }
+        }
+
+        transaction.update(roomRef, updates);
+      });
+    } catch (err) {
+      console.error("Error submitting online vote:", err);
+    }
+  };
+
+  const submitOnlineSpyGuess = async (guessedLocation) => {
+    playSound('click');
+    if (!onlineRoomCode || !roomState) return;
+
+    const roomRef = doc(db, 'rooms', onlineRoomCode);
+    try {
+      await updateDoc(roomRef, {
+        spyGuess: guessedLocation
+      });
+    } catch (err) {
+      console.error("Error submitting online spy guess:", err);
+    }
+  };
+
+  const handleOnlineSpySelfReveal = async (claimingPlayerId) => {
+    playSound('click');
+    if (!onlineRoomCode || !roomState) return;
+
+    const isSpy = roomState.spyPlayerId === claimingPlayerId;
+    const claimingPlayer = roomState.players.find(p => p.playerId === claimingPlayerId);
+    const roomRef = doc(db, 'rooms', onlineRoomCode);
+
+    try {
+      if (isSpy) {
+        await updateDoc(roomRef, {
+          status: 'guessing',
+          accusedPlayerId: claimingPlayerId,
+          votingStatus: 'none'
+        });
+      } else {
+        const spyPlayer = roomState.players.find(p => p.playerId === roomState.spyPlayerId);
+        await updateDoc(roomRef, {
+          status: 'game_over',
+          winner: { id: 'group', name: 'الأغلبية (الجروب)' },
+          reason: `اللعيب (${claimingPlayer ? claimingPlayer.name : 'بريء'}) افتكر نفسه المتغفل وهو بريء! الأغلبية كسبت الجيم.`,
+          votingStatus: 'none'
+        });
+      }
+    } catch (err) {
+      console.error("Error handling online self reveal:", err);
+    }
+  };
+
+  const restartOnlineSpyGame = async () => {
+    playSound('click');
+    if (!onlineRoomCode || !roomState) return;
+
+    const roomRef = doc(db, 'rooms', onlineRoomCode);
+    try {
+      const updatedPlayers = roomState.players.map(p => {
+        return {
+          ...p,
+          tempKey: p.playerId === myPlayerId ? myTempKey : p.playerId,
+          isReady: false,
+          encryptedRole: null
+        };
+      });
+
+      await updateDoc(roomRef, {
+        status: 'lobby',
+        players: updatedPlayers,
+        spyPlayerId: null,
+        spyGuessOptions: null,
+        spyGuess: null,
+        gameStartedAt: null,
+        accusedPlayerId: null,
+        votes: null,
+        votingStatus: null,
+        winner: null
+      });
+    } catch (err) {
+      console.error("Error restarting online spy game:", err);
+    }
+  };
+
   // --- ONLINE GAME ACTION EMITS ---
 
   const createOnlineRoom = async () => {
@@ -740,10 +1292,12 @@ export default function App() {
     const initialRoomState = {
       code: roomCode,
       status: 'lobby',
+      gameType: activeGame || 'send-101',
       players: [
         {
           id: myPlayerId,
           playerId: myPlayerId,
+          tempKey: myTempKey,
           name: onlineName.trim(),
           contacts: [],
           hand: [],
@@ -807,6 +1361,7 @@ export default function App() {
           room.players.push({
             id: myPlayerId,
             playerId: myPlayerId,
+            tempKey: myTempKey,
             name: onlineName.trim(),
             contacts: [],
             hand: [],
@@ -1209,10 +1764,16 @@ export default function App() {
     <div className="app-container" dir="rtl">
       <header>
         <div className="logo-container">
-          <span className="logo-text">{activeGame === 'send-101' ? 'SEND-101' : '101-GAMES'}</span>
+          <span className="logo-text">
+            {activeGame === 'send-101' ? 'SEND-101' : activeGame === 'el-motagafel' ? 'المتغفل' : '101-GAMES'}
+          </span>
         </div>
         <div className="subtitle">
-          {activeGame === 'send-101' ? 'تافه زي هاها شرير زي هيهي' : 'ألعاب قعدات ولمات الصحاب والضحك 🎮'}
+          {activeGame === 'send-101' 
+            ? 'تافه زي هاها شرير زي هيهي' 
+            : activeGame === 'el-motagafel' 
+              ? 'الكل هيلعب بقلب ميت! 🕵️' 
+              : 'ألعاب قعدات ولمات الصحاب والضحك 🎮'}
         </div>
       </header>
 
@@ -1261,21 +1822,25 @@ export default function App() {
               </div>
             </div>
 
-            {/* Locked Game 2: Truth or Dare */}
-            <div className="hub-game-card locked-game">
+            {/* Game 2: El-Motagafel */}
+            <div className="hub-game-card active-game" onClick={() => {
+              playSound('click');
+              setActiveGame('el-motagafel');
+              setMode('select');
+            }}>
               <div className="hub-game-icon-container">
-                <span className="hub-game-icon">🔥</span>
+                <span className="hub-game-icon">🕵️</span>
               </div>
               <div className="hub-game-details">
-                <h3 className="hub-game-title">صراحة ولا جرأة</h3>
-                <span className="hub-game-badge locked">جاي في السكة 🔒</span>
+                <h3 className="hub-game-title">المتغفل</h3>
+                <span className="hub-game-badge active">ادخل العب 🚀</span>
               </div>
             </div>
 
             {/* Locked Game 3: Mafia */}
             <div className="hub-game-card locked-game">
               <div className="hub-game-icon-container">
-                <span className="hub-game-icon">🕵️</span>
+                <span className="hub-game-icon">🤫</span>
               </div>
               <div className="hub-game-details">
                 <h3 className="hub-game-title">المافيا الغامضة</h3>
@@ -1289,7 +1854,7 @@ export default function App() {
       {/* 1. WELCOME SCREEN: Select Mode (Inside SEND-101) */}
       {activeGame === 'send-101' && mode === 'select' && (
         <div className="glass-panel">
-          <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', fontWeight: 800 }}>اختار هتلعب إزاي؟</h2>
+          <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', fontWeight: 800 }}>اختار هتلعب إزاي?</h2>
           
           <div className="mode-card active" onClick={() => {
             setMode('local');
@@ -1309,7 +1874,7 @@ export default function App() {
             <div className="mode-icon">🌐</div>
             <div className="mode-title">لعب أونلاين (كل واحد بموبايله)</div>
             <div className="mode-desc">
-              اعمل أوضة مع أصحابك. كل لعيب هيدخل من موبايله بكود الأوضة، ونفذوا الأحكام مع بعض لايف!
+          اعمل أوضة مع أصحابك. كل لعيب هيدخل من موبايله بكود الأوضة، ونفذوا الأحكام مع بعض لايف!
             </div>
           </div>
 
@@ -1324,8 +1889,50 @@ export default function App() {
         </div>
       )}
 
+      {/* 1. WELCOME SCREEN: Select Mode (Inside El-Motagafel) */}
+      {activeGame === 'el-motagafel' && mode === 'select' && (
+        <div className="glass-panel">
+          <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', fontWeight: 800 }}>المتغفل 🕵️</h2>
+          <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+            لعبة التناقض التدريجي.. مين المتغفل اللي بيدافع عن مكانه وهو أصلاً مش فيه؟
+          </p>
+          
+          <div className="mode-card active" onClick={() => {
+            playSound('click');
+            setMode('local');
+            setLocalPlayers(['لاعب 1', 'لاعب 2', 'لاعب 3']);
+          }}>
+            <div className="mode-icon">📱</div>
+            <div className="mode-title">لعب محلي (موبايل واحد)</div>
+            <div className="mode-desc">
+              تليفون واحد بيلف على كل اللاعيبة في القعدة. كل واحد بيشوف مكانه السري سرًا، وبعدين تبدأوا نقاش وتصويت.
+            </div>
+          </div>
+
+          <div className="mode-card" onClick={() => {
+            playSound('click');
+            setMode('online');
+          }}>
+            <div className="mode-icon">🌐</div>
+            <div className="mode-title">لعب أونلاين (كل واحد بموبايله)</div>
+            <div className="mode-desc">
+              اعمل أوضة مع أصحابك أو ادخل أوضة معمولة. كل واحد هيشوف مكانه على موبايله، والتصويت والتايمر شغالين مع بعض لايف!
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => { playSound('click'); setActiveGame(null); }}>
+              ↩️ ارجع
+            </button>
+            <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { playSound('click'); setShowHowToPlaySpy(true); }}>
+              إزاي تلعب؟ 📖
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 2. LOCAL GAME SCREENS */}
-      {mode === 'local' && (
+      {mode === 'local' && activeGame === 'send-101' && (
         <>
           {/* A. Local Lobby (Add/Remove Players) */}
           {!localGameState && (
@@ -1707,414 +2314,771 @@ export default function App() {
             </div>
           )}
 
-          {/* B. Lobby Screen (Waiting for players) */}
-          {roomState && roomState.status === 'lobby' && (
-            <div className="glass-panel">
-              <h2 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>أوضة الانتظار</h2>
-              
-              <div className="room-code-display">
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>كود الأوضة (دوس للنسخ):</span>
-                <span className="room-code" onClick={copyRoomCode} style={{ cursor: 'pointer' }}>
-                  {roomState.code}
-                </span>
-                {copiedCode && <span style={{ fontSize: '0.8rem', color: 'var(--success)' }}>تم النسخ!</span>}
-              </div>
-
-              <h3 style={{ marginBottom: '0.75rem', fontWeight: 700 }}>اللاعيبة اللي دخلوا ({playersList.length}):</h3>
-              <div className="lobby-players-list">
-                {playersList.map(p => (
-                  <div key={p.playerId} className="lobby-player-row" style={{ opacity: p.isDisconnected ? 0.5 : 1 }}>
-                    <span className="lobby-player-name">
-                      👤 {p.name} {p.isHost && <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>(صاحب الأوضة)</span>}
+          {/* Active online screens for send-101 */}
+          {roomState && activeGame === 'send-101' && (
+            <>
+              {/* B. Lobby Screen (Waiting for players) */}
+              {roomState && roomState.status === 'lobby' && (
+                <div className="glass-panel">
+                  <h2 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>أوضة الانتظار</h2>
+                  
+                  <div className="room-code-display">
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>كود الأوضة (دوس للنسخ):</span>
+                    <span className="room-code" onClick={copyRoomCode} style={{ cursor: 'pointer' }}>
+                      {roomState.code}
                     </span>
-                    {p.isDisconnected ? (
-                      <span className="waiting-badge" style={{ backgroundColor: 'var(--danger)', color: '#fff' }}>خلع / منقطع ⏳</span>
-                    ) : (
-                      <span className="waiting-badge">مستنيين</span>
-                    )}
+                    {copiedCode && <span style={{ fontSize: '0.8rem', color: 'var(--success)' }}>تم النسخ!</span>}
                   </div>
-                ))}
-              </div>
 
-              {/* Display generated Categories preview */}
-              <h3 style={{ marginBottom: '0.75rem', fontWeight: 700 }}>التصنيفات العشوائية للجيم:</h3>
-              <div className="category-badge-list" style={{ maxHeight: '180px', overflowY: 'auto' }}>
-                {roomState.selectedCategories.map((cat, idx) => (
-                  <div key={idx} className="category-item">
-                    <span className="category-number">{idx + 1}</span>
-                    <span>{cat}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Host starts the game */}
-              {playersList.find(p => p.playerId === myPlayerId)?.isHost ? (
-                <button
-                  className={`btn btn-secondary ${playersList.length < 3 ? 'btn-disabled' : ''}`}
-                  style={{ width: '100%', marginTop: '1.5rem' }}
-                  onClick={startOnlineNameEntry}
-                  disabled={playersList.length < 3}
-                >
-                  ابدأ تجهيز الأسامي (3+ لاعيبة)
-                </button>
-              ) : (
-                <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '1.5rem' }}>
-                  مستنيين صاحب الأوضة يبدأ اللعب...
-                </p>
-              )}
-
-              <button className="btn btn-outline" style={{ width: '100%', marginTop: '1rem' }} onClick={leaveOnlineRoom}>
-                اخرج من الأوضة
-              </button>
-            </div>
-          )}
-
-          {/* C. Online Name Entry Screen */}
-          {roomState && roomState.status === 'name_entry' && (
-            <div className="glass-panel">
-              <h2 style={{ marginBottom: '0.5rem', fontWeight: 800 }}>جهز أساميك الـ 10</h2>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', lineHeight: '1.5' }}>
-                اكتب الـ 10 أسامي الحقيقية المقابلة للتصنيفات بالترتيب. مفيش أي لعيب تاني هيشوف الأسامي اللي بتدخلها.
-              </p>
-
-              {playersList.find(p => p.playerId === myPlayerId)?.isReady ? (
-                <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-                  <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
-                  <h3>حفظنا أساميك بنجاح! 👍</h3>
-                  <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                    مستنيين باقي اللعيبة يخلصوا كتابة أساميهم...
-                  </p>
-                  <div style={{ marginTop: '1.5rem' }}>
+                  <h3 style={{ marginBottom: '0.75rem', fontWeight: 700 }}>اللاعيبة اللي دخلوا ({playersList.length}):</h3>
+                  <div className="lobby-players-list">
                     {playersList.map(p => (
-                      <div key={p.playerId} className="lobby-player-row" style={{ marginBottom: '0.5rem', opacity: p.isDisconnected ? 0.5 : 1 }}>
-                        <span>
-                          {p.name} {p.isDisconnected && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>(فصل 🔌)</span>}
+                      <div key={p.playerId} className="lobby-player-row" style={{ opacity: p.isDisconnected ? 0.5 : 1 }}>
+                        <span className="lobby-player-name">
+                          👤 {p.name} {p.isHost && <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>(صاحب الأوضة)</span>}
                         </span>
                         {p.isDisconnected ? (
-                          <span className="waiting-badge" style={{ backgroundColor: 'var(--danger)', color: '#fff' }}>فصل ⏳</span>
-                        ) : p.isReady ? (
-                          <span className="ready-badge">جاهز</span>
+                          <span className="waiting-badge" style={{ backgroundColor: 'var(--danger)', color: '#fff' }}>خلع / منقطع ⏳</span>
                         ) : (
-                          <span className="waiting-badge">بيكتب دلوقتي...✍️</span>
+                          <span className="waiting-badge">مستنيين</span>
                         )}
                       </div>
                     ))}
                   </div>
-                  <button className="btn btn-outline" style={{ width: '100%', marginTop: '1.5rem' }} onClick={leaveOnlineRoom}>
-                    اخرج من الأوضة
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div style={{ maxHeight: '350px', overflowY: 'auto', paddingLeft: '0.5rem', marginBottom: '1.5rem' }}>
+
+                  {/* Display generated Categories preview */}
+                  <h3 style={{ marginBottom: '0.75rem', fontWeight: 700 }}>التصنيفات العشوائية للجيم:</h3>
+                  <div className="category-badge-list" style={{ maxHeight: '180px', overflowY: 'auto' }}>
                     {roomState.selectedCategories.map((cat, idx) => (
-                      <div key={idx} className="form-group" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '14px', border: '1px solid var(--border-light)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{idx + 1}. {cat}</span>
-                          <button
-                            type="button"
-                            className="privacy-toggle"
-                            onClick={() => {
-                              const updated = [...onlineRevealInputs];
-                              updated[idx] = !updated[idx];
-                              setOnlineRevealInputs(updated);
-                            }}
-                          >
-                            {onlineRevealInputs[idx] ? '👁️' : '🔒'}
-                          </button>
-                        </div>
-                        <input
-                          type={onlineRevealInputs[idx] ? 'text' : 'password'}
-                          className="text-input"
-                          placeholder="اكتب اسمه الحقيقي هنا"
-                          value={onlineContactsInput[idx]}
-                          onChange={(e) => {
-                            const updated = [...onlineContactsInput];
-                            updated[idx] = e.target.value;
-                            setOnlineContactsInput(updated);
-                          }}
-                        />
+                      <div key={idx} className="category-item">
+                        <span className="category-number">{idx + 1}</span>
+                        <span>{cat}</span>
                       </div>
                     ))}
                   </div>
 
-                  <button
-                    type="button"
-                    className="btn btn-outline"
-                    style={{
-                      width: '100%',
-                      borderColor: 'rgba(234, 179, 8, 0.4)',
-                      color: '#eab308',
-                      fontSize: '0.95rem',
-                      marginBottom: '0.75rem'
-                    }}
-                    onClick={() => autoFillFakeNames(true)}
-                  >
-                    🧪 ملء تلقائي للتجربة (مؤقت)
-                  </button>
-                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-                    <button className="btn btn-outline" style={{ flex: 1 }} onClick={leaveOnlineRoom}>
-                      اخرج من الأوضة
+                  {/* Host starts the game */}
+                  {playersList.find(p => p.playerId === myPlayerId)?.isHost ? (
+                    <button
+                      className={`btn btn-secondary ${playersList.length < 3 ? 'btn-disabled' : ''}`}
+                      style={{ width: '100%', marginTop: '1.5rem' }}
+                      onClick={startOnlineNameEntry}
+                      disabled={playersList.length < 3}
+                    >
+                      ابدأ تجهيز الأسامي (3+ لاعيبة)
                     </button>
-                    <button className="btn btn-secondary" style={{ flex: 2 }} onClick={submitOnlineNames}>
-                      احفظ وابعت الأسامي
+                  ) : (
+                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '1.5rem' }}>
+                      مستنيين صاحب الأوضة يبدأ اللعب...
+                    </p>
+                  )}
+
+                  <button className="btn btn-outline" style={{ width: '100%', marginTop: '1rem' }} onClick={leaveOnlineRoom}>
+                    اخرج من الأوضة
+                  </button>
+                </div>
+              )}
+
+              {/* C. Online Name Entry Screen */}
+              {roomState && roomState.status === 'name_entry' && (
+                <div className="glass-panel">
+                  <h2 style={{ marginBottom: '0.5rem', fontWeight: 800 }}>جهز أساميك الـ 10</h2>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', lineHeight: '1.5' }}>
+                    اكتب الـ 10 أسامي الحقيقية المقابلة للتصنيفات بالترتيب. مفيش أي لعيب تاني هيشوف الأسامي اللي بتدخلها.
+                  </p>
+
+                  {playersList.find(p => p.playerId === myPlayerId)?.isReady ? (
+                    <div style={{ textAlign: 'center', padding: '2rem 0' }}>
+                      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
+                      <h3>حفظنا أساميك بنجاح! 👍</h3>
+                      <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                        مستنيين باقي اللعيبة يخلصوا كتابة أساميهم...
+                      </p>
+                      <div style={{ marginTop: '1.5rem' }}>
+                        {playersList.map(p => (
+                          <div key={p.playerId} className="lobby-player-row" style={{ marginBottom: '0.5rem', opacity: p.isDisconnected ? 0.5 : 1 }}>
+                            <span>
+                              {p.name} {p.isDisconnected && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>(فصل 🔌)</span>}
+                            </span>
+                            {p.isDisconnected ? (
+                              <span className="waiting-badge" style={{ backgroundColor: 'var(--danger)', color: '#fff' }}>فصل ⏳</span>
+                            ) : p.isReady ? (
+                              <span className="ready-badge">جاهز</span>
+                            ) : (
+                              <span className="waiting-badge">بيكتب دلوقتي...✍️</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button className="btn btn-outline" style={{ width: '100%', marginTop: '1.5rem' }} onClick={leaveOnlineRoom}>
+                        اخرج من الأوضة
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ maxHeight: '350px', overflowY: 'auto', paddingLeft: '0.5rem', marginBottom: '1.5rem' }}>
+                        {roomState.selectedCategories.map((cat, idx) => (
+                          <div key={idx} className="form-group" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '14px', border: '1px solid var(--border-light)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{idx + 1}. {cat}</span>
+                              <button
+                                type="button"
+                                className="privacy-toggle"
+                                onClick={() => {
+                                  const updated = [...onlineRevealInputs];
+                                  updated[idx] = !updated[idx];
+                                  setOnlineRevealInputs(updated);
+                                }}
+                              >
+                                {onlineRevealInputs[idx] ? '👁️' : '🔒'}
+                              </button>
+                            </div>
+                            <input
+                              type={onlineRevealInputs[idx] ? 'text' : 'password'}
+                              className="text-input"
+                              placeholder="اكتب اسمه الحقيقي هنا"
+                              value={onlineContactsInput[idx]}
+                              onChange={(e) => {
+                                const updated = [...onlineContactsInput];
+                                updated[idx] = e.target.value;
+                                setOnlineContactsInput(updated);
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{
+                          width: '100%',
+                          borderColor: 'rgba(234, 179, 8, 0.4)',
+                          color: '#eab308',
+                          fontSize: '0.95rem',
+                          marginBottom: '0.75rem'
+                        }}
+                        onClick={() => autoFillFakeNames(true)}
+                      >
+                        🧪 ملء تلقائي للتجربة (مؤقت)
+                      </button>
+                      <button className="btn btn-secondary" style={{ width: '100%' }} onClick={submitOnlineNames}>
+                        احفظ أسامي الجيم 🎮
+                      </button>
+                      <button className="btn btn-outline" style={{ width: '100%', marginTop: '0.75rem' }} onClick={leaveOnlineRoom}>
+                        اخرج من الأوضة
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* D. Online Active Game Screen */}
+              {roomState && roomState.status === 'playing' && (
+                <>
+                  {/* Turn Header */}
+                  <div className="glass-panel" style={{ padding: '1.25rem' }}>
+                    <div className="game-top-bar">
+                      <div className="turn-badge">
+                        الدور على: {playersList[roomState.turnIndex]?.name}
+                        {playersList[roomState.turnIndex]?.playerId === myPlayerId && ' (أنت)'}
+                      </div>
+                      <div className="score-badge">سكورك: {playersList.find(p => p.playerId === myPlayerId)?.score || 0} / 250</div>
+                    </div>
+                  </div>
+
+                  {/* Stage: Draw */}
+                  {roomState.currentTurn.stage === 'draw' && (
+                    <div className="glass-panel" style={{ textAlign: 'center' }}>
+                      {playersList[roomState.turnIndex]?.playerId === myPlayerId ? (
+                        <>
+                          <h3 style={{ marginBottom: '1rem' }}>دوس على الكارت عشان تسحب الضحية</h3>
+                          <div className="card-scene" onClick={drawOnlineNumberCard}>
+                            <div className="flip-card">
+                              <div className="card-face card-back">
+                                <div className="card-back-pattern">SEND-101</div>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ padding: '2rem 0' }}>
+                          <div className="waiting-spinner" style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
+                          <h3>مستنيين اللعيب {playersList[roomState.turnIndex]?.name} يسحب كارت...</h3>
+                          <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                            الحكم اللي هيتسحب هيتنفذ لايف قدامكم!
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Stage: Wait Victim (Nobody Card) */}
+                  {roomState.currentTurn.stage === 'wait_victim' && (
+                    <div className="glass-panel" style={{ textAlign: 'center' }}>
+                      {roomState.currentTurn.leftPlayerId === myPlayerId ? (
+                        <div>
+                          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😈</div>
+                          <h3 style={{ marginBottom: '0.75rem', fontWeight: 800 }}>كارت الـ Nobody!</h3>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: '1.4' }}>
+                            اللعيب {playersList[roomState.turnIndex]?.name} سحب كارت "Nobody". 
+                            أنت اللي على شماله، اختارله ضحية من لستة أساميك تلبسه فيها!
+                          </p>
+
+                          <div className="form-group" style={{ textAlign: 'right' }}>
+                            <label>اختار ضحية يتبعتلها الحكم:</label>
+                            <select
+                              className="text-input"
+                              style={{ width: '100%', background: '#1e1b4b', color: 'white' }}
+                              value={onlineNobodyVictim}
+                              onChange={(e) => setOnlineNobodyVictim(e.target.value)}
+                            >
+                              <option value="">-- اختار ضحية من أساميك --</option>
+                              {playersList.find(p => p.playerId === myPlayerId)?.contacts?.map((name, i) => (
+                                <option key={i} value={name}>{i+1}. {name} ({roomState.selectedCategories[i]})</option>
+                              ))}
+                            </select>
+                          </div>
+                          <button
+                            className={`btn btn-secondary ${!onlineNobodyVictim ? 'btn-disabled' : ''}`}
+                            style={{ width: '100%', marginTop: '0.5rem' }}
+                            onClick={submitOnlineNobodyVictim}
+                            disabled={!onlineNobodyVictim}
+                          >
+                            ابعت الضحية اللي اخترتها
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="target-reveal">
+                          <p style={{ color: 'var(--text-secondary)' }}>
+                            مستنيين اللعيب {playersList.find(p => p.playerId === roomState.currentTurn.leftPlayerId)?.name} يختار الضحية من لستته...
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Stage: Execute (Active player performs chosen card or emergency card) */}
+                  {roomState.currentTurn.stage === 'execute' && (
+                    <div className="glass-panel" style={{ textAlign: 'center' }}>
+                      {playersList[roomState.turnIndex]?.playerId === myPlayerId ? (
+                        // Active player execution panel
+                        !roomState.currentTurn.emergencyCard ? (
+                          <>
+                            <h3 style={{ marginBottom: '1rem', color: 'var(--primary)' }}>الحكم اللي عليك تنفذه</h3>
+                            
+                            <div className="dare-card" style={{ cursor: 'default', margin: '1rem 0' }}>
+                              <span className={`dare-card-type ${roomState.currentTurn.chosenCard.type.includes('فويس') ? 'voice' : roomState.currentTurn.chosenCard.type.includes('مسدج') || roomState.currentTurn.chosenCard.type.includes('رسالة') ? 'message' : 'call'}`}>
+                                {roomState.currentTurn.chosenCard.type}
+                              </span>
+                              <div className="dare-card-text" style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                                {roomState.currentTurn.chosenCard.text}
+                              </div>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--warning)', marginTop: '0.5rem' }}>
+                                الضحية اللي هتكلمها: <strong>{roomState.currentTurn.victimName}</strong>
+                              </div>
+                            </div>
+
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.4' }}>
+                              لازم تبعت الحكم للضحية بجدية تامة. وممنوع تمسح الرسالة أو تلغي الاتصال طول ما الجيم شغال!
+                            </p>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                              <button className="btn btn-success" onClick={executeOnlineSuccess}>
+                                نفذت الحكم بجدية (+50 نقطة) ✅
+                              </button>
+                              <button className="btn btn-danger" onClick={chickenOnlineOut}>
+                                هخلع (انسحاب طوارئ 🚨)
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="emergency-card-container" style={{ padding: '1.25rem', borderRadius: '20px' }}>
+                            <div className="emergency-header">🚨 كارت الطوارئ: هخلع</div>
+                            <p style={{ fontSize: '1.1rem', margin: '1rem 0', lineHeight: '1.5', fontWeight: 600 }}>
+                              {roomState.currentTurn.emergencyCard.text}
+                            </p>
+                            
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.5rem' }}>
+                              <button className="btn btn-secondary" onClick={executeOnlineEmergency}>
+                                نفذت كارت هخلع (+20 نقطة) 🚨
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      ) : (
+                        // Other players waiting during execution
+                        <div style={{ padding: '1rem 0' }}>
+                          <h3 style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>الحكم بيتنفذ دلوقتي...</h3>
+                          <p>
+                            اللعيب {playersList[roomState.turnIndex]?.name} عليه الحكم ده عشان يكلم {roomState.currentTurn.victimName}:
+                          </p>
+                          <div className="dare-card" style={{ cursor: 'default', margin: '1rem 0', opacity: 0.85 }}>
+                            <span className={`dare-card-type ${roomState.currentTurn.chosenCard.type.includes('فويس') ? 'voice' : roomState.currentTurn.chosenCard.type.includes('مسدج') || roomState.currentTurn.chosenCard.type.includes('رسالة') ? 'message' : 'call'}`}>
+                              {roomState.currentTurn.chosenCard.type}
+                            </span>
+                            <div className="dare-card-text">{roomState.currentTurn.chosenCard.text}</div>
+                          </div>
+                          
+                          {roomState.currentTurn.emergencyCard && (
+                            <div className="emergency-card-container" style={{ padding: '0.8rem', borderRadius: '14px', marginTop: '1rem' }}>
+                              <div style={{ fontWeight: 'bold', color: '#ff8a8d' }}>🚨 خلع ولجأ لكارت الطوارئ:</div>
+                              <div style={{ marginTop: '0.25rem', fontSize: '0.9rem' }}>{roomState.currentTurn.emergencyCard.text}</div>
+                            </div>
+                          )}
+
+                          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1rem' }}>
+                            مستنيين اللعيب يأكد إنه نفذ...
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Online Scoreboard Overlay */}
+                  <div className="glass-panel scoreboard">
+                    <div className="scoreboard-title">جدول النقط (الهدف: 250 نقطة)</div>
+                    {playersList.map(p => (
+                      <div key={p.playerId} className="score-row" style={{ opacity: p.isDisconnected ? 0.5 : 1 }}>
+                        <div className="score-row-meta">
+                          <span>
+                            {p.name} {p.playerId === playersList[roomState.turnIndex]?.playerId && '👈'}
+                            {p.isDisconnected && <span style={{ fontSize: '0.75rem', color: 'var(--danger)', marginRight: '0.5rem' }}>(فصل 🔌)</span>}
+                          </span>
+                          <span>{p.score} / 250</span>
+                        </div>
+                        <div className="score-progress-container">
+                          <div
+                            className="score-progress-bar"
+                            style={{ width: `${Math.min(100, (p.score / 250) * 100)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <button
+                      className="btn btn-outline"
+                      style={{ width: '100%', marginTop: '1.5rem' }}
+                      onClick={leaveOnlineRoom}
+                    >
+                      اخرج من الأوضة
                     </button>
                   </div>
                 </>
               )}
-            </div>
-          )}
 
-          {/* D. Online Active Game Play Screen */}
-          {roomState && roomState.status === 'playing' && (
-            <>
-              {/* Turn Banner */}
-              <div className="glass-panel" style={{ padding: '1.25rem' }}>
-                <div className="game-top-bar">
-                  <div className="turn-badge">
-                    {playersList[roomState.turnIndex]?.playerId === myPlayerId 
-                      ? 'دورك أنت يا بطل! 😎' 
-                      : `دور اللعيب: ${playersList[roomState.turnIndex]?.name}`}
-                  </div>
-                  <div className="score-badge">سكورك: {playersList.find(p => p.playerId === myPlayerId)?.score || 0} / 250</div>
-                </div>
-              </div>
-
-              {/* Active Player - Stage: Draw Card */}
-              {playersList[roomState.turnIndex]?.playerId === myPlayerId && roomState.currentTurn.stage === 'draw' && (
+              {/* E. Online Game Over */}
+              {roomState && roomState.status === 'game_over' && (
                 <div className="glass-panel" style={{ textAlign: 'center' }}>
-                  <h3 style={{ marginBottom: '1.25rem' }}>دوس على الكارت عشان تسحب الضحية</h3>
-                  
-                  <div className="card-scene" onClick={drawOnlineNumberCard}>
-                    <div className="flip-card">
-                      <div className="card-face card-back">
-                        <div className="card-back-pattern">SEND-101</div>
-                        <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', marginTop: '1rem' }}>اسحب الكارت</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Non-Active Players - Stage: Draw Card */}
-              {playersList[roomState.turnIndex]?.playerId !== myPlayerId && roomState.currentTurn.stage === 'draw' && (
-                <div className="glass-panel" style={{ textAlign: 'center', padding: '2.5rem 1.5rem' }}>
-                  <div style={{ fontSize: '3rem', marginBottom: '1.25rem' }}>🎲</div>
-                  <h3>مستنيين سحب كارت الرقم...</h3>
-                  <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                    اللعيب {playersList[roomState.turnIndex]?.name} بيسحب كارت الرقم دلوقتي.
-                  </p>
-                </div>
-              )}
-
-              {/* Stage: Wait Victim (Only for Nobody card drawn) */}
-              {roomState.currentTurn.stage === 'wait_victim' && (
-                <div className="glass-panel" style={{ textAlign: 'center' }}>
-                  <div className="card-scene">
-                    <div className={`flip-card ${cardFlipped ? 'is-flipped' : ''}`}>
-                      <div className="card-face card-back">
-                        <div className="card-back-pattern">SEND-101</div>
-                      </div>
-                      <div className="card-front card-face">
-                        <div className="card-front-nobody">Nobody</div>
-                        <div className="card-front-label">اتسحب كارت الـ Nobody! 🤷‍♂️</div>
-                      </div>
+                  <ConfettiEffect />
+                  <div className="winner-box">
+                    <div className="winner-crown">👑</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>الفايز بالجيم هو البطل 👑</div>
+                    <div className="winner-name">{roomState.winner.name}</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
+                      النقط: {roomState.winner.score} نقطة
                     </div>
                   </div>
 
-                  {roomState.currentTurn.leftPlayerId === myPlayerId ? (
-                    <div className="target-reveal">
-                      <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                        أنت اللعيب اللي على شمال {playersList[roomState.turnIndex]?.name}!
-                        اختارله ضحية من لستة أساميك.
-                      </p>
-                      <div className="form-group">
-                        <select
-                          className="text-input"
-                          style={{ width: '100%', background: '#1e1b4b', color: 'white' }}
-                          value={onlineNobodyVictim}
-                          onChange={(e) => setOnlineNobodyVictim(e.target.value)}
-                        >
-                          <option value="">-- اختار ضحية من أساميك --</option>
-                          {playersList.find(p => p.playerId === myPlayerId)?.contacts?.map((name, i) => (
-                            <option key={i} value={name}>{i+1}. {name} ({roomState.selectedCategories[i]})</option>
-                          ))}
-                        </select>
-                      </div>
-                      <button
-                        className={`btn btn-secondary ${!onlineNobodyVictim ? 'btn-disabled' : ''}`}
-                        style={{ width: '100%', marginTop: '0.5rem' }}
-                        onClick={submitOnlineNobodyVictim}
-                        disabled={!onlineNobodyVictim}
-                      >
-                        ابعت الضحية اللي اخترتها
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="target-reveal">
-                      <p style={{ color: 'var(--text-secondary)' }}>
-                        مستنيين اللعيب {playersList.find(p => p.playerId === roomState.currentTurn.leftPlayerId)?.name} يختار الضحية من لستته...
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Stage: Execute (Active player performs chosen card or emergency card) */}
-              {roomState.currentTurn.stage === 'execute' && (
-                <div className="glass-panel" style={{ textAlign: 'center' }}>
-                  {playersList[roomState.turnIndex]?.playerId === myPlayerId ? (
-                    // Active player execution panel
-                    !roomState.currentTurn.emergencyCard ? (
-                      <>
-                        <h3 style={{ marginBottom: '1rem', color: 'var(--primary)' }}>الحكم اللي عليك تنفذه</h3>
-                        
-                        <div className="dare-card" style={{ cursor: 'default', margin: '1rem 0' }}>
-                          <span className={`dare-card-type ${roomState.currentTurn.chosenCard.type.includes('فويس') ? 'voice' : roomState.currentTurn.chosenCard.type.includes('مسدج') || roomState.currentTurn.chosenCard.type.includes('رسالة') ? 'message' : 'call'}`}>
-                            {roomState.currentTurn.chosenCard.type}
-                          </span>
-                          <div className="dare-card-text" style={{ fontSize: '1.25rem', fontWeight: 700 }}>
-                            {roomState.currentTurn.chosenCard.text}
-                          </div>
-                          <div style={{ fontSize: '0.9rem', color: 'var(--warning)', marginTop: '0.5rem' }}>
-                            الضحية اللي هتكلمها: <strong>{roomState.currentTurn.victimName}</strong>
-                          </div>
-                        </div>
-
-                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.4' }}>
-                          لازم تبعت الحكم للضحية بجدية تامة. وممنوع تمسح الرسالة أو تلغي الاتصال طول ما الجيم شغال!
-                        </p>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                          <button className="btn btn-success" onClick={executeOnlineSuccess}>
-                            نفذت الحكم بجدية (+50 نقطة) ✅
-                          </button>
-                          <button className="btn btn-danger" onClick={chickenOnlineOut}>
-                            هخلع (انسحاب طوارئ 🚨)
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="emergency-card-container" style={{ padding: '1.25rem', borderRadius: '20px' }}>
-                        <div className="emergency-header">🚨 كارت الطوارئ: هخلع</div>
-                        <p style={{ fontSize: '1.1rem', margin: '1rem 0', lineHeight: '1.5', fontWeight: 600 }}>
-                          {roomState.currentTurn.emergencyCard.text}
-                        </p>
-                        
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.5rem' }}>
-                          <button className="btn btn-secondary" onClick={executeOnlineEmergency}>
-                            نفذت كارت هخلع (+20 نقطة) 🚨
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  ) : (
-                    // Other players waiting during execution
-                    <div style={{ padding: '1rem 0' }}>
-                      <h3 style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>الحكم بيتنفذ دلوقتي...</h3>
-                      <p>
-                        اللعيب {playersList[roomState.turnIndex]?.name} عليه الحكم ده عشان يكلم {roomState.currentTurn.victimName}:
-                      </p>
-                      <div className="dare-card" style={{ cursor: 'default', margin: '1rem 0', opacity: 0.85 }}>
-                        <span className={`dare-card-type ${roomState.currentTurn.chosenCard.type.includes('فويس') ? 'voice' : roomState.currentTurn.chosenCard.type.includes('مسدج') || roomState.currentTurn.chosenCard.type.includes('رسالة') ? 'message' : 'call'}`}>
-                          {roomState.currentTurn.chosenCard.type}
-                        </span>
-                        <div className="dare-card-text">{roomState.currentTurn.chosenCard.text}</div>
-                      </div>
+                  <h3 style={{ margin: '1.5rem 0 1rem 0', fontWeight: 800, color: 'var(--danger)' }}>عقابات اللعيبة الخسرانين ("هخلع") 💀</h3>
+                  <div className="punishment-box">
+                    {playersList.map(p => {
+                      if (p.playerId === roomState.winner.playerId) return null;
                       
-                      {roomState.currentTurn.emergencyCard && (
-                        <div className="emergency-card-container" style={{ padding: '0.8rem', borderRadius: '14px', marginTop: '1rem' }}>
-                          <div style={{ fontWeight: 'bold', color: '#ff8a8d' }}>🚨 خلع ولجأ لكارت الطوارئ:</div>
-                          <div style={{ marginTop: '0.25rem', fontSize: '0.9rem' }}>{roomState.currentTurn.emergencyCard.text}</div>
-                        </div>
-                      )}
+                      const seedVal = p.name.charCodeAt(0) + p.score;
+                      const punIndex = seedVal % allEmergencyCards.length;
+                      const ptext = allEmergencyCards[punIndex].text;
 
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1rem' }}>
-                        مستنيين اللعيب يأكد إنه نفذ...
-                      </p>
-                    </div>
+                      return (
+                        <div key={p.playerId} className="punishment-player-card">
+                          <div style={{ fontWeight: 'bold', textAlign: 'right' }}>{p.name} (عقابه):</div>
+                          <div className="punishment-text" style={{ textAlign: 'right' }}>{ptext}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {playersList.find(p => p.playerId === myPlayerId)?.isHost ? (
+                    <button className="btn btn-primary" style={{ width: '100%', marginTop: '2rem' }} onClick={restartOnlineGame}>
+                      نلعب تاني 🔄
+                    </button>
+                  ) : (
+                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '2rem' }}>
+                      مستنيين صاحب الأوضة يبدأ جيم جديد...
+                    </p>
                   )}
+
+                  <button className="btn btn-outline" style={{ width: '100%', marginTop: '1rem' }} onClick={leaveOnlineRoom}>
+                    ارجع لبوابة الألعاب
+                  </button>
                 </div>
               )}
-
-              {/* Online Scoreboard Overlay */}
-              <div className="glass-panel scoreboard">
-                <div className="scoreboard-title">جدول النقط (الهدف: 250 نقطة)</div>
-                {playersList.map(p => (
-                  <div key={p.playerId} className="score-row" style={{ opacity: p.isDisconnected ? 0.5 : 1 }}>
-                    <div className="score-row-meta">
-                      <span>
-                        {p.name} {p.playerId === playersList[roomState.turnIndex]?.playerId && '👈'}
-                        {p.isDisconnected && <span style={{ fontSize: '0.75rem', color: 'var(--danger)', marginRight: '0.5rem' }}>(فصل 🔌)</span>}
-                      </span>
-                      <span>{p.score} / 250</span>
-                    </div>
-                    <div className="score-progress-container">
-                      <div
-                        className="score-progress-bar"
-                        style={{ width: `${Math.min(100, (p.score / 250) * 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
-                
-                <button
-                  className="btn btn-outline"
-                  style={{ width: '100%', marginTop: '1.5rem' }}
-                  onClick={leaveOnlineRoom}
-                >
-                  اخرج من الأوضة
-                </button>
-              </div>
             </>
           )}
 
-          {/* E. Online Game Over */}
-          {roomState && roomState.status === 'game_over' && (
-            <div className="glass-panel" style={{ textAlign: 'center' }}>
-              <ConfettiEffect />
-              <div className="winner-box">
-                <div className="winner-crown">👑</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>الفايز بالجيم هو البطل 👑</div>
-                <div className="winner-name">{roomState.winner.name}</div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
-                  النقط: {roomState.winner.score} نقطة
-                </div>
-              </div>
-
-              <h3 style={{ margin: '1.5rem 0 1rem 0', fontWeight: 800, color: 'var(--danger)' }}>عقابات اللعيبة الخسرانين ("هخلع") 💀</h3>
-              <div className="punishment-box">
-                {playersList.map(p => {
-                  if (p.playerId === roomState.winner.playerId) return null;
+          {/* Active online screens for el-motagafel */}
+          {roomState && activeGame === 'el-motagafel' && (
+            <>
+              {/* Online Spy Lobby Screen */}
+              {roomState.status === 'lobby' && (
+                <div className="glass-panel">
+                  <h2 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>أوضة الانتظار - المتغفل 🕵️</h2>
                   
-                  // In online mode, we can show a random emergency card text assigned as punishment
-                  const seedVal = p.name.charCodeAt(0) + p.score;
-                  const punIndex = seedVal % allEmergencyCards.length;
-                  const ptext = allEmergencyCards[punIndex].text;
+                  <div className="room-code-display">
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>كود الأوضة (دوس للنسخ):</span>
+                    <span className="room-code" onClick={copyRoomCode} style={{ cursor: 'pointer' }}>
+                      {roomState.code}
+                    </span>
+                    {copiedCode && <span style={{ fontSize: '0.8rem', color: 'var(--success)' }}>تم النسخ!</span>}
+                  </div>
 
-                  return (
-                    <div key={p.playerId} className="punishment-player-card">
-                      <div style={{ fontWeight: 'bold', textAlign: 'right' }}>{p.name} (عقابه):</div>
-                      <div className="punishment-text" style={{ textAlign: 'right' }}>{ptext}</div>
-                    </div>
-                  );
-                })}
-              </div>
+                  <h3 style={{ marginBottom: '0.75rem', fontWeight: 700 }}>اللاعيبة اللي دخلوا ({playersList.length}):</h3>
+                  <div className="lobby-players-list">
+                    {playersList.map(p => (
+                      <div key={p.playerId} className="lobby-player-row" style={{ opacity: p.isDisconnected ? 0.5 : 1 }}>
+                        <span className="lobby-player-name">
+                          👤 {p.name} {p.isHost && <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>(صاحب الأوضة)</span>}
+                        </span>
+                        {p.isDisconnected ? (
+                          <span className="waiting-badge" style={{ backgroundColor: 'var(--danger)', color: '#fff' }}>خلع / منقطع ⏳</span>
+                        ) : (
+                          <span className="waiting-badge">مستنيين</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
 
-              {playersList.find(p => p.playerId === myPlayerId)?.isHost ? (
-                <button className="btn btn-primary" style={{ width: '100%', marginTop: '2rem' }} onClick={restartOnlineGame}>
-                  نلعب تاني 🔄
-                </button>
-              ) : (
-                <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '2rem' }}>
-                  مستنيين صاحب الأوضة يبدأ جيم جديد...
-                </p>
+                  {/* Host starts the game */}
+                  {playersList.find(p => p.playerId === myPlayerId)?.isHost ? (
+                    <button
+                      className={`btn btn-secondary ${playersList.length < 3 ? 'btn-disabled' : ''}`}
+                      style={{ width: '100%', marginTop: '2rem' }}
+                      onClick={startOnlineSpySetup}
+                      disabled={playersList.length < 3}
+                    >
+                      ابدأ الجيم 🎮 (3+ لاعيبة)
+                    </button>
+                  ) : (
+                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '2rem' }}>
+                      مستنيين صاحب الأوضة يبدأ اللعب...
+                    </p>
+                  )}
+
+                  <button className="btn btn-outline" style={{ width: '100%', marginTop: '1rem' }} onClick={leaveOnlineRoom}>
+                    اخرج من الأوضة
+                  </button>
+                </div>
               )}
 
-              <button className="btn btn-outline" style={{ width: '100%', marginTop: '1rem' }} onClick={leaveOnlineRoom}>
-                ارجع لبوابة الألعاب
-              </button>
-            </div>
+              {/* Online Spy Reveal Screen */}
+              {roomState.status === 'reveal' && (
+                <div className="glass-panel" style={{ textAlign: 'center' }}>
+                  <h2 style={{ marginBottom: '1rem', fontWeight: 800 }}>الكشف السري 🕵️</h2>
+                  
+                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '2rem' }}>
+                    دوس على الكارت عشان تعرف مكانك السري من غير ما حد واقف جنبك يلمحه.
+                  </p>
+
+                  {!isLocationRevealed ? (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ width: '100%', padding: '1.5rem', fontSize: '1.1rem', fontWeight: 'bold' }}
+                      onClick={() => { playSound('flip'); setIsLocationRevealed(true); }}
+                    >
+                      اظهر مكاني السري 👁️
+                    </button>
+                  ) : (
+                    <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                      <div className="card-face card-front" style={{ margin: '0 auto 2rem auto', height: 'auto', padding: '2rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--primary)', marginBottom: '0.5rem' }}>المكان السري بتاعك هو:</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800 }}>{myDecryptedRole?.location}</div>
+                      </div>
+
+                      {playersList.find(p => p.playerId === myPlayerId)?.isReady ? (
+                        <div style={{
+                          background: 'rgba(34, 197, 94, 0.1)',
+                          border: '1px solid rgba(34, 197, 94, 0.2)',
+                          padding: '1rem',
+                          borderRadius: '14px',
+                          color: 'var(--success)',
+                          marginBottom: '1.5rem'
+                        }}>
+                          جاهز! مستنيين باقي اللعيبة... 👍
+                        </div>
+                      ) : (
+                        <button
+                          className="btn btn-primary"
+                          style={{ width: '100%', marginBottom: '1.5rem' }}
+                          onClick={() => { submitOnlineSpyReady(); setIsLocationRevealed(false); }}
+                        >
+                          أنا جاهز 👍
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Online Spy Active Game Screen */}
+              {roomState.status === 'playing' && (
+                <div className="glass-panel" style={{ textAlign: 'center' }}>
+                  {roomState.votingStatus === 'voting' ? (
+                    <div>
+                      <div className="winner-crown" style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🚨</div>
+                      <h2 style={{ fontWeight: 850, marginBottom: '1.25rem' }}>تصويت طوارئ!</h2>
+
+                      <div style={{
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        padding: '1.25rem',
+                        borderRadius: '16px',
+                        marginBottom: '1.5rem'
+                      }}>
+                        <span style={{ fontSize: '0.95rem' }}>اللعيب المتهم هو: </span>
+                        <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--danger)' }}>
+                          {playersList.find(p => p.playerId === roomState.accusedPlayerId)?.name}
+                        </span>
+                      </div>
+
+                      {roomState.accusedPlayerId === myPlayerId ? (
+                        <div>
+                          <p style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--primary)', marginBottom: '1rem' }}>
+                            أنت المتهم! الباقي بيصوت عليك دلوقتي... 🤫
+                          </p>
+                          <div className="lobby-players-list" style={{ marginTop: '1.5rem' }}>
+                            {playersList.filter(p => p.playerId !== roomState.accusedPlayerId).map(p => (
+                              <div key={p.playerId} className="lobby-player-row">
+                                <span>{p.name}</span>
+                                {roomState.votes?.[p.playerId] !== undefined ? (
+                                  <span className="ready-badge">صوّت خلاص</span>
+                                ) : (
+                                  <span className="waiting-badge">بيفكر...</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          {roomState.votes?.[myPlayerId] !== undefined ? (
+                            <div>
+                              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                                تم تسجيل صوتك بنجاح. مستنيين باقي اللعيبة... 👍
+                              </p>
+                              <div className="lobby-players-list">
+                                {playersList.filter(p => p.playerId !== roomState.accusedPlayerId).map(p => (
+                                  <div key={p.playerId} className="lobby-player-row">
+                                    <span>{p.name}</span>
+                                    {roomState.votes?.[p.playerId] !== undefined ? (
+                                      <span className="ready-badge">صوّت خلاص</span>
+                                    ) : (
+                                      <span className="waiting-badge">بيفكر...</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                                هل تظن إن اللعيب ده هو المتغفل؟
+                              </p>
+                              <div style={{ display: 'flex', gap: '1rem' }}>
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ flex: 1, padding: '1rem' }}
+                                  onClick={() => submitOnlineSpyVote(true)}
+                                >
+                                  نعم، هو المتغفل ✅
+                                </button>
+                                <button
+                                  className="btn btn-outline"
+                                  style={{ flex: 1, padding: '1rem' }}
+                                  onClick={() => submitOnlineSpyVote(false)}
+                                >
+                                  لا، بريء ❌
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <h2 style={{ fontWeight: 800, marginBottom: '0.5rem' }}>وقت النقاش والأسئلة 🗣️</h2>
+                      
+                      <div style={{
+                        fontSize: '3.5rem',
+                        fontWeight: 900,
+                        fontFamily: 'var(--font-english)',
+                        color: spyTimer < 30 ? 'var(--danger)' : 'var(--primary)',
+                        margin: '1rem 0 1.5rem 0',
+                        textShadow: '0 0 15px rgba(234, 179, 8, 0.2)'
+                      }}>
+                        {Math.floor(spyTimer / 60)}:{String(spyTimer % 60).padStart(2, '0')}
+                      </div>
+
+                      <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+                        اسألوا بعض أسئلة ذكية عشان تكشفوا مين المتغفل من غير ما توضحوا اسم مكانكم الصح.
+                      </p>
+
+                      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', margin: '1.5rem 0' }}></div>
+
+                      <h3 style={{ marginBottom: '1rem', fontWeight: 700 }}>اتهم حد أو أعلن إنك المتغفل:</h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {playersList.map(p => (
+                          <div key={p.playerId} style={{ display: 'flex', gap: '0.5rem', width: '100%', alignItems: 'center' }}>
+                            <span style={{ flex: 1, textAlign: 'right', fontWeight: 'bold' }}>
+                              👤 {p.name} {p.playerId === myPlayerId && <span style={{ color: 'var(--primary)', fontSize: '0.8rem' }}>(أنت)</span>}
+                            </span>
+                            
+                            {p.playerId !== myPlayerId && (
+                              <button
+                                className="btn btn-outline"
+                                style={{ flex: 1.5, fontSize: '0.85rem', padding: '0.5rem 0.75rem' }}
+                                onClick={() => startOnlineSpyVoting(p.playerId)}
+                              >
+                                اتهم اللعيب ده 🚨
+                              </button>
+                            )}
+
+                            {p.playerId === myPlayerId && (
+                              <button
+                                className="btn btn-outline"
+                                style={{ flex: 1.5, fontSize: '0.85rem', padding: '0.5rem 0.75rem', borderColor: 'rgba(239, 68, 68, 0.4)', color: 'var(--danger)' }}
+                                onClick={() => handleOnlineSpySelfReveal(myPlayerId)}
+                              >
+                                أنا المتغفل 🕵️
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <button className="btn btn-outline" style={{ width: '100%', marginTop: '2rem' }} onClick={leaveOnlineRoom}>
+                        اخرج من الأوضة 🚪
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Online Spy Guess Screen */}
+              {roomState.status === 'guessing' && (
+                <div className="glass-panel" style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🕵️</div>
+                  <h2 style={{ fontWeight: 850, marginBottom: '0.5rem' }}>تخمين مكان الأغلبية</h2>
+                  
+                  <div className="turn-badge" style={{ display: 'inline-block', marginBottom: '1.5rem' }}>
+                    دور المتغفل: {playersList.find(p => p.playerId === roomState.accusedPlayerId)?.name}
+                  </div>
+
+                  {roomState.spyPlayerId === myPlayerId ? (
+                    <div>
+                      <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+                        أنت المتغفل! قدامك فرصة واحدة عشان تخمن مكان الأغلبية الصح من بين الـ 10 خيارات دول. لو خمنت صح هتكسب الجيم!
+                      </p>
+
+                      <div className="guess-options-grid" style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, 1fr)',
+                        gap: '0.75rem',
+                        marginBottom: '2rem'
+                      }}>
+                        {(roomState.spyGuessOptions || []).map((opt, idx) => (
+                          <button
+                            key={idx}
+                            className={`btn ${spyGuessOptionSelected === opt ? 'btn-secondary' : 'btn-outline'}`}
+                            style={{ fontSize: '0.9rem', padding: '0.75rem 0.5rem' }}
+                            onClick={() => { playSound('click'); setSpyGuessOptionSelected(opt); }}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        className={`btn btn-primary ${!spyGuessOptionSelected ? 'btn-disabled' : ''}`}
+                        style={{ width: '100%' }}
+                        onClick={() => { submitOnlineSpyGuess(spyGuessOptionSelected); setSpyGuessOptionSelected(''); }}
+                        disabled={!spyGuessOptionSelected}
+                      >
+                        أكد التخمين النهائي 🧐
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '2rem 0' }}>
+                      <div className="waiting-spinner" style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>⏳</div>
+                      <h3>المتغفل بيخمن مكان الأغلبية دلوقتي...</h3>
+                      <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                        ركزوا معاه وشوفوا هيجيبها صح ولا غلط!
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Online Spy Game Over Screen */}
+              {roomState.status === 'game_over' && (
+                <div className="glass-panel" style={{ textAlign: 'center' }}>
+                  <ConfettiEffect />
+                  <div className="winner-box">
+                    <div className="winner-crown">👑</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>الفايز بالجيم هو 👑</div>
+                    <div className="winner-name">{roomState.winner?.name}</div>
+                  </div>
+
+                  <div style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid var(--border-light)',
+                    padding: '1.25rem',
+                    borderRadius: '16px',
+                    margin: '1.5rem 0',
+                    lineHeight: '1.6',
+                    textAlign: 'right'
+                  }}>
+                    <strong>السبب: </strong> {roomState.reason}
+                  </div>
+
+                  <h3 style={{ margin: '1.5rem 0 1rem 0', fontWeight: 800, color: 'var(--danger)' }}>عقابات اللعيبة الخسرانين 💀</h3>
+                  <div className="punishment-box">
+                    {playersList.map(p => {
+                      const isWinnerGroup = roomState.winner?.id === 'group';
+                      const isPlayerSpy = p.playerId === roomState.spyPlayerId;
+                      
+                      if (isWinnerGroup && !isPlayerSpy) return null;
+                      if (!isWinnerGroup && isPlayerSpy) return null;
+
+                      const seedVal = p.name.charCodeAt(0) + (p.name.charCodeAt(p.name.length - 1) || 0);
+                      const punIndex = seedVal % allEmergencyCards.length;
+                      const ptext = allEmergencyCards[punIndex].text;
+
+                      return (
+                        <div key={p.playerId} className="punishment-player-card">
+                          <div style={{ fontWeight: 'bold', textAlign: 'right' }}>{p.name} (عقابه):</div>
+                          <div className="punishment-text" style={{ textAlign: 'right' }}>{ptext}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {playersList.find(p => p.playerId === myPlayerId)?.isHost ? (
+                    <button className="btn btn-primary" style={{ width: '100%', marginTop: '2rem' }} onClick={restartOnlineSpyGame}>
+                      نلعب تاني 🔄
+                    </button>
+                  ) : (
+                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '2rem' }}>
+                      مستنيين صاحب الأوضة يبدأ جيم جديد...
+                    </p>
+                  )}
+
+                  <button className="btn btn-outline" style={{ width: '100%', marginTop: '1rem' }} onClick={leaveOnlineRoom}>
+                    ارجع لبوابة الألعاب 🏠
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
@@ -2206,6 +3170,43 @@ export default function App() {
               </li>
               <li>
                 <strong>5. المكسب:</strong> أول لعيب يوصل لـ <strong>250 نقطة</strong> هو الفايز بطل الجيم 👑. والخسرانين بيتفرقع عليهم عقابات عشوائية!
+              </li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* How to Play Modal (Spy Game) */}
+      {showHowToPlaySpy && (
+        <div className="dev-modal-overlay" onClick={() => setShowHowToPlaySpy(false)}>
+          <div className="how-to-play-modal-content" onClick={(e) => e.stopPropagation()} style={{ direction: 'rtl' }}>
+            <button className="dev-modal-close" onClick={() => setShowHowToPlaySpy(false)}>×</button>
+            <h3>إزاي تلعب المتغفل؟ 🕵️</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: '1.4', textAlign: 'center' }}>
+              لعبة الذكاء والتناقض النفسي. دي القواعد بالمصري ومن غير فزلكة:
+            </p>
+            <ul style={{ listStyleType: 'disc' }}>
+              <li>
+                <strong>1. الأماكن متقاربة:</strong> اللعبة بتختار مكانين شبه بعض أوي (مثلاً: جيم شعبي في حارة ضد جيم 5 نجوم في كومباوند).
+              </li>
+              <li>
+                <strong>2. كلنا في الهوا سوا:</strong> كل اللعيبة (الأغلبية) هيظهرلهم نفس المكان (أ)، ماعدا لعيب واحد عشوائي (المتغفل) هيظهرله المكان (ب).
+              </li>
+              <li>
+                <strong>3. مين المتغفل؟:</strong> اللعبة مش هتقول مين المتغفل! يعني حتى المتغفل نفسه هيفتكر إنه مع الأغلبية وبيدافع عن مكانه بكل ثقة.
+              </li>
+              <li>
+                <strong>4. وقت الكلام (3 دقائق):</strong> اقعدوا اسألوا بعض أسئلة ذكية عن المكان. مثلاً: "الناس بتلبس إيه وهي رايحة هناك؟" أو "بتدفع كام هناك؟". المتغفل هيبدأ يلاحظ تناقض تدريجي في كلامه مع الباقيين!
+              </li>
+              <li>
+                <strong>5. قفش المتغفل:</strong> لو شاكين في حد، ابدأوا تصويت عليه:
+                <ul style={{ listStyleType: 'circle', paddingRight: '1rem', marginTop: '0.25rem' }}>
+                  <li>لو اتهمتوا حد بريء ⬅️ <strong>المتغفل يكسب فوراً!</strong></li>
+                  <li>لو اتهمتوا المتغفل صح ⬅️ المتغفل بياخد فرصة أخيرة لتخمين مكان الأغلبية من 10 خيارات. لو جابها صح ⬅️ <strong>يكسب</strong>، لو غلط ⬅️ <strong>الأغلبية تكسب</strong>.</li>
+                </ul>
+              </li>
+              <li>
+                <strong>6. التفركش الذاتي:</strong> لو أنت حسيت إنك المتغفل في أي وقت من الجيم، تقدر تدوس "أنا المتغفل" وتخمن مكان الأغلبية وتكسب الجيم لو صح!
               </li>
             </ul>
           </div>
