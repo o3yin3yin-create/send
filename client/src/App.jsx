@@ -292,6 +292,7 @@ export default function App() {
   const [cardFlipped, setCardFlipped] = useState(false);
   const [showDevModal, setShowDevModal] = useState(false);
   const [showPhones, setShowPhones] = useState(false);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
 
   // Computed players list to track online/disconnected status dynamically
   const playersList = React.useMemo(() => {
@@ -1256,7 +1257,6 @@ export default function App() {
               </div>
               <div className="hub-game-details">
                 <h3 className="hub-game-title">SEND-101</h3>
-                <p className="hub-game-desc">اللعبة الحماسية عشان تقفش وتفرقع أحكام على أصحابك مع جهات اتصالهم! اتحدوا بعض في أحكام تواصل مسخرة ومحرجة.</p>
                 <span className="hub-game-badge active">ادخل العب 🚀</span>
               </div>
             </div>
@@ -1268,7 +1268,6 @@ export default function App() {
               </div>
               <div className="hub-game-details">
                 <h3 className="hub-game-title">صراحة ولا جرأة</h3>
-                <p className="hub-game-desc">لعبة صراحة ولا جرأة الكلاسيكية بطريقة جديدة خالص وتحديات روشة.</p>
                 <span className="hub-game-badge locked">جاي في السكة 🔒</span>
               </div>
             </div>
@@ -1280,7 +1279,6 @@ export default function App() {
               </div>
               <div className="hub-game-details">
                 <h3 className="hub-game-title">المافيا الغامضة</h3>
-                <p className="hub-game-desc">لعبة الذكاء والشك وحوارات المافيا. اقفش المافيا اللي وسطكوا قبل ما يخلصوا على الكل!</p>
                 <span className="hub-game-badge locked">جاي في السكة 🔒</span>
               </div>
             </div>
@@ -1315,9 +1313,14 @@ export default function App() {
             </div>
           </div>
 
-          <button className="btn btn-outline" style={{ width: '100%', marginTop: '1.5rem' }} onClick={() => { playSound('click'); setActiveGame(null); }}>
-            ↩️ ارجع لبوابة الألعاب
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => { playSound('click'); setActiveGame(null); }}>
+              ↩️ ارجع
+            </button>
+            <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { playSound('click'); setShowHowToPlay(true); }}>
+              إزاي تلعب؟ 📖
+            </button>
+          </div>
         </div>
       )}
 
@@ -2171,6 +2174,40 @@ export default function App() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* How to Play Modal */}
+      {showHowToPlay && (
+        <div className="dev-modal-overlay" onClick={() => setShowHowToPlay(false)}>
+          <div className="how-to-play-modal-content" onClick={(e) => e.stopPropagation()} style={{ direction: 'rtl' }}>
+            <button className="dev-modal-close" onClick={() => setShowHowToPlay(false)}>×</button>
+            <h3>إزاي تلعب SEND-101؟ ✈️</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: '1.4', textAlign: 'center' }}>
+              اللعبة سهلة ومحتاجة جرأة وضحك! دي القواعد ببساطة:
+            </p>
+            <ul style={{ listStyleType: 'disc' }}>
+              <li>
+                <strong>1. جهز أساميك:</strong> كل لعيب بيكتب 10 أسامي حقيقية من أصحابه وقرايبه مقابلة لتصنيفات عشوائية (زي الكراش، الإكس، مديرك...). الأسامي دي سرية ومحدش غيرك هيشوفها.
+              </li>
+              <li>
+                <strong>2. اسحب كارت:</strong> في دورك، هتسحب كارت الضحية عشان يظهرلك رقم عشوائي (من 1 لـ 10) والضحية المقابلة ليه من أساميك، ومعه حكم عشوائي.
+              </li>
+              <li>
+                <strong>3. نفذ أو اخلع:</strong> قدامك خيارين:
+                <ul style={{ listStyleType: 'circle', paddingRight: '1rem', marginTop: '0.25rem' }}>
+                  <li><strong>نفذ الحكم:</strong> تنفذ الحكم بجدية مع الضحية وتأخد <strong>+50 نقطة</strong>.</li>
+                  <li><strong>هخلع:</strong> لو الحكم محرج أوي، دوس "هخلع" عشان يجيلك كارت طوارئ عشوائي تنفذه وتأخد <strong>+20 نقطة</strong> بس.</li>
+                </ul>
+              </li>
+              <li>
+                <strong>4. كارت الـ Nobody:</strong> لو سحبت كارت وطلع "Nobody"، اللعيب اللي على شمالك هيختارلك ضحية من لستة أساميه هو يلبسك فيها!
+              </li>
+              <li>
+                <strong>5. المكسب:</strong> أول لعيب يوصل لـ <strong>250 نقطة</strong> هو الفايز بطل الجيم 👑. والخسرانين بيتفرقع عليهم عقابات عشوائية!
+              </li>
+            </ul>
           </div>
         </div>
       )}
