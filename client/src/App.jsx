@@ -387,7 +387,7 @@ export default function App() {
   const startLocalSetup = () => {
     playSound('click');
     if (localPlayers.length < 3) {
-      alert('يجب أن يكون عدد اللاعبين 3 على الأقل للعب.');
+      alert('لازم يكون فيه 3 لعيبة على الأقل عشان تلعبوا.');
       return;
     }
     const selectedCats = shuffle(allCategories).slice(0, 10);
@@ -421,7 +421,7 @@ export default function App() {
     const trimmed = newPlayerName.trim();
     if (!trimmed) return;
     if (localPlayers.length >= 10) {
-      alert('الحد الأقصى للاعبين هو 10.');
+      alert('آخركوا 10 لعيبة بس.');
       return;
     }
     setLocalPlayers([...localPlayers, trimmed]);
@@ -431,7 +431,7 @@ export default function App() {
   const removeLocalPlayer = (index) => {
     playSound('click');
     if (localPlayers.length <= 3) {
-      alert('الحد الأدنى للاعبين هو 3.');
+      alert('مينفعش تلعبوا بأقل من 3 لعيبة.');
       return;
     }
     setLocalPlayers(localPlayers.filter((_, idx) => idx !== index));
@@ -492,7 +492,7 @@ export default function App() {
     playSound('click');
     // Validate inputs
     if (localContactsInput.some(name => !name.trim())) {
-      alert('الرجاء إدخال كافة الأسماء الـ 10 للبدء.');
+      alert('لازم تكتب الـ 10 أسامي كلهم عشان تبدأوا.');
       return;
     }
 
@@ -583,7 +583,7 @@ export default function App() {
   const submitLocalNobodyVictim = () => {
     playSound('click');
     if (!selectedNobodyVictimName.trim()) {
-      alert('الرجاء إدخال اسم الضحية.');
+      alert('اختار الضحية الأول يا بطل.');
       return;
     }
     playSound('flip');
@@ -723,7 +723,7 @@ export default function App() {
 
   const createOnlineRoom = async () => {
     if (!onlineName.trim()) {
-      alert('الرجاء كتابة اسمك أولاً.');
+      alert('اكتب اسمك الأول معلش.');
       return;
     }
     playSound('click');
@@ -771,13 +771,13 @@ export default function App() {
       console.log(`Room created successfully on Firestore: ${roomCode}`);
     } catch (err) {
       console.error("Error creating room on Firestore:", err);
-      alert("حدث خطأ أثناء إنشاء الغرفة. يرجى المحاولة مرة أخرى.");
+      alert("حصلت مشكلة وإحنا بنعمل الأوضة. جرب تاني كده معلش.");
     }
   };
 
   const joinOnlineRoom = async () => {
     if (!onlineName.trim() || !roomCodeInput.trim()) {
-      alert('الرجاء كتابة اسمك وكود الغرفة للاتصال.');
+      alert('اكتب اسمك وكود الأوضة عشان تدخل.');
       return;
     }
     playSound('click');
@@ -788,16 +788,16 @@ export default function App() {
       await runTransaction(db, async (transaction) => {
         const sfDoc = await transaction.get(roomRef);
         if (!sfDoc.exists()) {
-          throw new Error('غرفة غير موجودة. تأكد من الكود.');
+          throw new Error('الأوضة دي مش موجودة، اتأكد من الكود كويس.');
         }
 
         const room = sfDoc.data();
         if (room.status !== 'lobby') {
-          throw new Error('اللعبة بدأت بالفعل في هذه الغرفة.');
+          throw new Error('الجيم بدأ خلاص في الأوضة دي.');
         }
 
         if (room.players.length >= 10) {
-          throw new Error('الغرفة ممتلئة (الحد الأقصى 10 لاعبين).');
+          throw new Error('الأوضة مليانة على الآخر (آخرها 10 لعيبة).');
         }
 
         // Add player if they aren't already in
@@ -826,7 +826,7 @@ export default function App() {
       console.log(`Joined room successfully: ${rCode}`);
     } catch (err) {
       console.error("Error joining room:", err);
-      alert(err.message || "حدث خطأ أثناء الانضمام للغرفة.");
+      alert(err.message || "حصلت مشكلة وإنت بتدخل الأوضة. جرب تاني كده.");
     }
   };
 
@@ -844,7 +844,7 @@ export default function App() {
   const submitOnlineNames = async () => {
     playSound('click');
     if (!onlineRoomCode || onlineContactsInput.some(name => !name.trim())) {
-      alert('الرجاء ملء كل الخانات الـ 10 للأسماء.');
+      alert('لازم تكتب الـ 10 أسامي كلهم الأول.');
       return;
     }
 
@@ -1224,16 +1224,16 @@ export default function App() {
       {/* Restore Session Banner */}
       {mode === 'select' && localStorage.getItem('send_room_code') && (
         <div className="glass-panel restore-banner">
-          <span style={{ fontSize: '1.5rem', display: 'block', marginBottom: '0.5rem' }}>🔄 لعبة غير مكتملة</span>
+          <span style={{ fontSize: '1.5rem', display: 'block', marginBottom: '0.5rem' }}>🔄 فيه جيم مكملش</span>
           <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: '1.4' }}>
-            تم العثور على جلسة لعب سابقة في الغرفة **{localStorage.getItem('send_room_code')}** باسم **{localStorage.getItem('send_player_name')}**. هل تريد استئناف اللعب؟
+            لقينا جيم قديم مكملش في أوضة **{localStorage.getItem('send_room_code')}** باسم **{localStorage.getItem('send_player_name')}**. تحب ترجع تكمله؟
           </p>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button className="btn btn-secondary" style={{ flex: 2, fontSize: '0.95rem', padding: '0.65rem 1rem' }} onClick={handleRestoreSession}>
-              نعم، العودة للغرفة 👍
+              أيوه، رجعني الأوضة 👍
             </button>
             <button className="btn btn-outline" style={{ flex: 1, fontSize: '0.95rem', padding: '0.65rem 1rem' }} onClick={handleDiscardSession}>
-              تجاهل ❌
+              فكك منه ❌
             </button>
           </div>
         </div>
@@ -1242,7 +1242,7 @@ export default function App() {
       {/* 0. GAME HUB: Select Game */}
       {activeGame === null && (
         <div className="glass-panel hub-panel">
-          <h2 style={{ textAlign: 'center', marginBottom: '1.75rem', fontWeight: 800 }}>منصة الألعاب 🎮</h2>
+          <h2 style={{ textAlign: 'center', marginBottom: '1.75rem', fontWeight: 800 }}>بوابة الألعاب 🎮</h2>
           
           <div className="hub-grid">
             {/* Game 1: SEND-101 */}
@@ -1291,7 +1291,7 @@ export default function App() {
       {/* 1. WELCOME SCREEN: Select Mode (Inside SEND-101) */}
       {activeGame === 'send-101' && mode === 'select' && (
         <div className="glass-panel">
-          <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', fontWeight: 800 }}>اختر طريقة اللعب</h2>
+          <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', fontWeight: 800 }}>اختار هتلعب إزاي؟</h2>
           
           <div className="mode-card active" onClick={() => {
             setMode('local');
@@ -1309,14 +1309,14 @@ export default function App() {
             setOnlineContactsInput(Array(10).fill(''));
           }}>
             <div className="mode-icon">🌐</div>
-            <div className="mode-title">لعب أونلاين (عن بعد)</div>
+            <div className="mode-title">لعب أونلاين (كل واحد بموبايله)</div>
             <div className="mode-desc">
-              اعمل غرفة مع أصحابك. كل لاعب يدخل من موبايله بكود الغرفة، ونفذوا الأحكام مع بعض لايف!
+              اعمل أوضة مع أصحابك. كل لعيب هيدخل من موبايله بكود الأوضة، ونفذوا الأحكام مع بعض لايف!
             </div>
           </div>
 
           <button className="btn btn-outline" style={{ width: '100%', marginTop: '1.5rem' }} onClick={() => { playSound('click'); setActiveGame(null); }}>
-            ↩️ العودة لمنصة الألعاب
+            ↩️ ارجع لبوابة الألعاب
           </button>
         </div>
       )}
@@ -1327,21 +1327,21 @@ export default function App() {
           {/* A. Local Lobby (Add/Remove Players) */}
           {!localGameState && (
             <div className="glass-panel">
-              <h2 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>تجهيز القائمة المحلية</h2>
+              <h2 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>جهز لستة الأسامي</h2>
               
               <div className="form-group">
-                <label>أضف اللاعبين (3 إلى 10 لاعبين):</label>
+                <label>ضيف لاعيبة (من 3 لـ 10 لاعيبة):</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input
                     type="text"
                     className="text-input"
                     style={{ flex: 1 }}
-                    placeholder="اسم اللاعب"
+                    placeholder="اسم اللعيب"
                     value={newPlayerName}
                     onChange={(e) => setNewPlayerName(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && addLocalPlayer()}
                   />
-                  <button className="btn btn-primary" onClick={addLocalPlayer}>أضف</button>
+                  <button className="btn btn-primary" onClick={addLocalPlayer}>ضيف</button>
                 </div>
               </div>
 
@@ -1368,7 +1368,7 @@ export default function App() {
                   onClick={startLocalSetup}
                   disabled={localPlayers.length < 3}
                 >
-                  ابدأ التجهيز
+                  يلا نجهز أسامينا
                 </button>
               </div>
             </div>
@@ -1378,12 +1378,12 @@ export default function App() {
           {localGameState && localGameState.status === 'name_entry' && (
             <div className="glass-panel">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                <h2 style={{ fontWeight: 800 }}>تجهيز الأسماء</h2>
+                <h2 style={{ fontWeight: 800 }}>تجهيز الأسامي</h2>
                 <div className="turn-badge">دور: {localGameState.players[currentEnteringPlayerIdx].name}</div>
               </div>
               
               <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', lineHeight: '1.5' }}>
-                اكتب 10 أسماء حقيقية من الـ Contacts عندك تطابق التصنيفات دي بالترتيب. استخدم درع الخصوصية لإخفاء كتابتك.
+                اكتب 10 أسامي حقيقية من جهات الاتصال (Contacts) عندك تطابق التصنيفات دي بالترتيب. استخدم درع الخصوصية عشان تخفي كتابتك.
               </p>
 
               <div style={{ maxHeight: '380px', overflowY: 'auto', paddingLeft: '0.5rem', marginBottom: '1.5rem' }}>
@@ -1406,7 +1406,7 @@ export default function App() {
                     <input
                       type={revealInputs[idx] ? 'text' : 'password'}
                       className="text-input"
-                      placeholder="اسم الشخص من جهات الاتصال"
+                      placeholder="اكتب الاسم الحقيقي هنا"
                       value={localContactsInput[idx]}
                       onChange={(e) => {
                         const updated = [...localContactsInput];
@@ -1434,8 +1434,8 @@ export default function App() {
               </button>
               <button className="btn btn-secondary" style={{ width: '100%' }} onClick={submitLocalNames}>
                 {currentEnteringPlayerIdx < localGameState.players.length - 1 
-                  ? 'حفظ وتمرير الهاتف للاعب التالي'
-                  : 'ابدأ اللعب! 🎮'}
+                  ? 'حفظ وتمرير الموبايل للعيب اللي بعده'
+                  : 'يلا نلعب! 🎮'}
               </button>
             </div>
           )}
@@ -1446,21 +1446,21 @@ export default function App() {
               {/* Turn Header */}
               <div className="glass-panel" style={{ padding: '1.25rem' }}>
                 <div className="game-top-bar">
-                  <div className="turn-badge">المستهدف: {localGameState.players[localGameState.turnIndex].name}</div>
-                  <div className="score-badge">النقاط: {localGameState.players[localGameState.turnIndex].score} / 250</div>
+                  <div className="turn-badge">الدور على: {localGameState.players[localGameState.turnIndex].name}</div>
+                  <div className="score-badge">السكور: {localGameState.players[localGameState.turnIndex].score} / 250</div>
                 </div>
               </div>
 
               {/* Step 1: Draw Card */}
               {localGameState.currentTurn.stage === 'draw' && (
                 <div className="glass-panel" style={{ textAlign: 'center' }}>
-                  <h3 style={{ marginBottom: '1rem' }}>اسحب كارت الرقم لتحديد الضحية</h3>
+                  <h3 style={{ marginBottom: '1rem' }}>دوس على الكارت عشان تسحب الضحية</h3>
                   
                   <div className="card-scene" onClick={localDrawNumberCard}>
                     <div className="flip-card">
                       <div className="card-face card-back">
                         <div className="card-back-pattern">SEND-101</div>
-                        <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', marginTop: '1rem' }}>اضغط للسحب</span>
+                        <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', marginTop: '1rem' }}>دوس عشان تسحب</span>
                       </div>
                     </div>
                   </div>
@@ -1483,7 +1483,7 @@ export default function App() {
                           <div className="card-front-number">{localGameState.currentTurn.numberCard}</div>
                         )}
                         <div className="card-front-label">
-                          {localGameState.currentTurn.numberCard === 'Nobody' ? 'مفيش ضحية من عندك!' : 'الضحية من قائمتك'}
+                          {localGameState.currentTurn.numberCard === 'Nobody' ? 'مفيش ضحية من عندك!' : 'الضحية من لستتك'}
                         </div>
                       </div>
                     </div>
@@ -1492,21 +1492,21 @@ export default function App() {
                   {localGameState.currentTurn.stage === 'wait_victim' && (
                     <div className="target-reveal">
                       <p style={{ color: 'var(--text-secondary)' }}>
-                        بما أنه طلع كارت **Nobody**، اللاعب اللي على شمالك ({
+                        بما أنه طلع كارت **Nobody**، اللعيب اللي على شمالك ({
                           localGameState.players[(localGameState.turnIndex + 1) % localGameState.players.length].name
-                        }) هيختارلك ضحية من القايمة بتاعته هو!
+                        }) هيختارلك ضحية من لستته هو!
                       </p>
                       <div className="form-group" style={{ marginTop: '1rem' }}>
                         <input
                           type="text"
                           className="text-input"
-                          placeholder="اكتب اسم الضحية من قائمتك"
+                          placeholder="اكتب اسم الضحية من لستتك"
                           value={selectedNobodyVictimName}
                           onChange={(e) => setSelectedNobodyVictimName(e.target.value)}
                         />
                       </div>
                       <button className="btn btn-secondary" style={{ width: '100%' }} onClick={submitLocalNobodyVictim}>
-                        تأكيد الضحية
+                        أكد الضحية
                       </button>
                     </div>
                   )}
@@ -1530,7 +1530,7 @@ export default function App() {
                 <div className="glass-panel" style={{ textAlign: 'center' }}>
                   {!localGameState.currentTurn.emergencyCard ? (
                     <>
-                      <h3 style={{ marginBottom: '1rem', color: 'var(--primary)' }}>الحكم المطلوب تنفيذه</h3>
+                       <h3 style={{ marginBottom: '1rem', color: 'var(--primary)' }}>الحكم اللي عليك تنفذه</h3>
                       <div className="dare-card" style={{ cursor: 'default', margin: '1rem 0' }}>
                         <span className={`dare-card-type ${localGameState.currentTurn.chosenCard.type.includes('فويس') ? 'voice' : localGameState.currentTurn.chosenCard.type.includes('مسدج') || localGameState.currentTurn.chosenCard.type.includes('رسالة') ? 'message' : 'call'}`}>
                           {localGameState.currentTurn.chosenCard.type}
@@ -1539,12 +1539,12 @@ export default function App() {
                           {localGameState.currentTurn.chosenCard.text}
                         </div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--warning)', marginTop: '0.5rem' }}>
-                          المستهدف بالتواصل: <strong style={{ textDecoration: 'underline' }}>{localGameState.currentTurn.victimName}</strong>
+                          الضحية اللي هتكلمها: <strong style={{ textDecoration: 'underline' }}>{localGameState.currentTurn.victimName}</strong>
                         </div>
                       </div>
 
                       <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.4' }}>
-                        تنبيه: يجب تنفيذ الحكم بجدية كاملة دون حذف الرسالة أو الفويس أو الاتصال حتى انتهاء اللعبة!
+                        لازم تبعت الحكم للضحية بجدية تامة. وممنوع تمسح الرسالة أو تلغي الاتصال طول ما الجيم شغال!
                       </p>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1552,7 +1552,7 @@ export default function App() {
                           نفذت الحكم بجدية (+50 نقطة)
                         </button>
                         <button className="btn btn-danger" onClick={localChickenOut}>
-                          هخلع (انسحاب طوارئ)
+                          هخلع (هروب طوارئ)
                         </button>
                       </div>
                     </>
@@ -1575,7 +1575,7 @@ export default function App() {
 
               {/* Local Scoreboard Display */}
               <div className="glass-panel scoreboard">
-                <div className="scoreboard-title">لوحة النقاط (الهدف: 250 نقطة)</div>
+                <div className="scoreboard-title">لوحة النقط (الهدف: 250 نقطة)</div>
                 {localGameState.players.map(p => (
                   <div key={p.id} className="score-row">
                     <div className="score-row-meta">
@@ -1596,7 +1596,7 @@ export default function App() {
                   style={{ width: '100%', marginTop: '1.5rem' }}
                   onClick={resetLocalGame}
                 >
-                  إنهاء اللعبة والعودة للرئيسية
+                  إنهاء الجيم والرجوع للرئيسية
                 </button>
               </div>
             </>
@@ -1608,14 +1608,14 @@ export default function App() {
               <ConfettiEffect />
               <div className="winner-box">
                 <div className="winner-crown">👑</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>الفائز بالجيم هو</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>الفايز بالجيم هو البطل 👑</div>
                 <div className="winner-name">{localGameState.winner.name}</div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
-                  النقاط: {localGameState.winner.score} نقطة
+                  النقط: {localGameState.winner.score} نقطة
                 </div>
               </div>
 
-              <h3 style={{ margin: '1.5rem 0 1rem 0', fontWeight: 800, color: 'var(--danger)' }}>أحكام عقاب الخاسرين ("هخلع")</h3>
+              <h3 style={{ margin: '1.5rem 0 1rem 0', fontWeight: 800, color: 'var(--danger)' }}>عقابات اللعيبة الخسرانين ("هخلع") 💀</h3>
               <div className="punishment-box">
                 {localGameState.players.map(p => {
                   if (p.id === localGameState.winner.id) return null;
@@ -1629,7 +1629,7 @@ export default function App() {
               </div>
 
               <button className="btn btn-primary" style={{ width: '100%', marginTop: '2rem' }} onClick={resetLocalGame}>
-                اللعب مجدداً
+                نلعب تاني 🔄
               </button>
             </div>
           )}
@@ -1642,14 +1642,14 @@ export default function App() {
           {/* A. Connect screen (Create/Join room) */}
           {!roomState && (
             <div className="glass-panel">
-              <h2 style={{ marginBottom: '1.5rem', fontWeight: 800 }}>إنشاء أو دخول غرفة أونلاين</h2>
+              <h2 style={{ marginBottom: '1.5rem', fontWeight: 800 }}>اعمل أو ادخل أوضة أونلاين</h2>
               
               <div className="form-group">
-                <label>اسمك المستعار:</label>
+                <label>اسم الشهرة بتاعك:</label>
                 <input
                   type="text"
                   className="text-input"
-                  placeholder="مثال: أحمد"
+                  placeholder="مثال: حمو"
                   value={onlineName}
                   onChange={(e) => setOnlineName(e.target.value)}
                 />
@@ -1659,14 +1659,14 @@ export default function App() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <button className="btn btn-secondary" onClick={createOnlineRoom}>
-                  أنشئ غرفة جديدة ➕
+                  اعمل أوضة جديدة ➕
                 </button>
               </div>
 
               <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', margin: '1.5rem 0' }}></div>
 
               <div className="form-group">
-                <label>أدخل كود الغرفة (4 حروف):</label>
+                <label>اكتب كود الأوضة (4 حروف):</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input
                     type="text"
@@ -1677,12 +1677,12 @@ export default function App() {
                     value={roomCodeInput}
                     onChange={(e) => setRoomCodeInput(e.target.value)}
                   />
-                  <button className="btn btn-outline" onClick={joinOnlineRoom}>دخول 🚪</button>
+                  <button className="btn btn-outline" onClick={joinOnlineRoom}>خش الأوضة 🚪</button>
                 </div>
               </div>
 
               <button className="btn btn-outline" style={{ width: '100%', marginTop: '1.5rem' }} onClick={() => setMode('select')}>
-                رجوع للرئيسية
+                ارجع للرئيسية
               </button>
             </div>
           )}
@@ -1690,27 +1690,27 @@ export default function App() {
           {/* B. Lobby Screen (Waiting for players) */}
           {roomState && roomState.status === 'lobby' && (
             <div className="glass-panel">
-              <h2 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>غرفة الانتظار</h2>
+              <h2 style={{ marginBottom: '1.25rem', fontWeight: 800 }}>أوضة الانتظار</h2>
               
               <div className="room-code-display">
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>كود الغرفة (اضغط للنسخ):</span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>كود الأوضة (دوس للنسخ):</span>
                 <span className="room-code" onClick={copyRoomCode} style={{ cursor: 'pointer' }}>
                   {roomState.code}
                 </span>
                 {copiedCode && <span style={{ fontSize: '0.8rem', color: 'var(--success)' }}>تم النسخ!</span>}
               </div>
 
-              <h3 style={{ marginBottom: '0.75rem', fontWeight: 700 }}>اللاعبون المتصلون ({playersList.length}):</h3>
+              <h3 style={{ marginBottom: '0.75rem', fontWeight: 700 }}>اللاعيبة اللي دخلوا ({playersList.length}):</h3>
               <div className="lobby-players-list">
                 {playersList.map(p => (
                   <div key={p.playerId} className="lobby-player-row" style={{ opacity: p.isDisconnected ? 0.5 : 1 }}>
                     <span className="lobby-player-name">
-                      👤 {p.name} {p.isHost && <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>(المضيف)</span>}
+                      👤 {p.name} {p.isHost && <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>(صاحب الأوضة)</span>}
                     </span>
                     {p.isDisconnected ? (
-                      <span className="waiting-badge" style={{ backgroundColor: 'var(--danger)', color: '#fff' }}>منقطع ⏳</span>
+                      <span className="waiting-badge" style={{ backgroundColor: 'var(--danger)', color: '#fff' }}>خلع / منقطع ⏳</span>
                     ) : (
-                      <span className="waiting-badge">في الانتظار</span>
+                      <span className="waiting-badge">مستنيين</span>
                     )}
                   </div>
                 ))}
@@ -1735,16 +1735,16 @@ export default function App() {
                   onClick={startOnlineNameEntry}
                   disabled={playersList.length < 3}
                 >
-                  ابدأ تجهيز الأسماء (3+ لاعبين)
+                  ابدأ تجهيز الأسامي (3+ لاعيبة)
                 </button>
               ) : (
                 <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '1.5rem' }}>
-                  بإنتظار قيام مضيف الغرفة ببدء اللعب...
+                  مستنيين صاحب الأوضة يبدأ اللعب...
                 </p>
               )}
 
               <button className="btn btn-outline" style={{ width: '100%', marginTop: '1rem' }} onClick={leaveOnlineRoom}>
-                مغادرة الغرفة
+                اخرج من الأوضة
               </button>
             </div>
           )}
@@ -1752,30 +1752,30 @@ export default function App() {
           {/* C. Online Name Entry Screen */}
           {roomState && roomState.status === 'name_entry' && (
             <div className="glass-panel">
-              <h2 style={{ marginBottom: '0.5rem', fontWeight: 800 }}>تجهيز جهات الاتصال الخاصة بك</h2>
+              <h2 style={{ marginBottom: '0.5rem', fontWeight: 800 }}>جهز أساميك الـ 10</h2>
               <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', lineHeight: '1.5' }}>
-                املأ الـ 10 أسماء الحقيقية المقابلة للتصنيفات بالترتيب. لن يرى اللاعبون الآخرون الأسماء التي تدخلها.
+                اكتب الـ 10 أسامي الحقيقية المقابلة للتصنيفات بالترتيب. مفيش أي لعيب تاني هيشوف الأسامي اللي بتدخلها.
               </p>
 
               {playersList.find(p => p.playerId === myPlayerId)?.isReady ? (
                 <div style={{ textAlign: 'center', padding: '2rem 0' }}>
                   <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
-                  <h3>تم حفظ أسمائك بنجاح!</h3>
+                  <h3>حفظنا أساميك بنجاح! 👍</h3>
                   <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                    بإنتظار باقي اللاعبين للانتهاء من كتابة أسمائهم...
+                    مستنيين باقي اللعيبة يخلصوا كتابة أساميهم...
                   </p>
                   <div style={{ marginTop: '1.5rem' }}>
                     {playersList.map(p => (
                       <div key={p.playerId} className="lobby-player-row" style={{ marginBottom: '0.5rem', opacity: p.isDisconnected ? 0.5 : 1 }}>
                         <span>
-                          {p.name} {p.isDisconnected && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>(منقطع)</span>}
+                          {p.name} {p.isDisconnected && <span style={{ fontSize: '0.75rem', color: 'var(--danger)' }}>(فصل 🔌)</span>}
                         </span>
                         {p.isDisconnected ? (
-                          <span className="waiting-badge" style={{ backgroundColor: 'var(--danger)', color: '#fff' }}>منقطع ⏳</span>
+                          <span className="waiting-badge" style={{ backgroundColor: 'var(--danger)', color: '#fff' }}>فصل ⏳</span>
                         ) : p.isReady ? (
                           <span className="ready-badge">جاهز</span>
                         ) : (
-                          <span className="waiting-badge">يكتب الآن...</span>
+                          <span className="waiting-badge">بيكتب دلوقتي...✍️</span>
                         )}
                       </div>
                     ))}
@@ -1803,7 +1803,7 @@ export default function App() {
                         <input
                           type={onlineRevealInputs[idx] ? 'text' : 'password'}
                           className="text-input"
-                          placeholder="اسم جهة الاتصال الحقيقية"
+                          placeholder="اكتب اسمه الحقيقي هنا"
                           value={onlineContactsInput[idx]}
                           onChange={(e) => {
                             const updated = [...onlineContactsInput];
@@ -1830,7 +1830,7 @@ export default function App() {
                     🧪 ملء تلقائي للتجربة (مؤقت)
                   </button>
                   <button className="btn btn-secondary" style={{ width: '100%' }} onClick={submitOnlineNames}>
-                    حفظ وإرسال الأسماء
+                    احفظ وابعت الأسامي
                   </button>
                 </>
               )}
@@ -1846,22 +1846,22 @@ export default function App() {
                   <div className="turn-badge">
                     {playersList[roomState.turnIndex]?.playerId === myPlayerId 
                       ? 'دورك أنت يا بطل! 😎' 
-                      : `دور اللاعب: ${playersList[roomState.turnIndex]?.name}`}
+                      : `دور اللعيب: ${playersList[roomState.turnIndex]?.name}`}
                   </div>
-                  <div className="score-badge">نقاطك: {playersList.find(p => p.playerId === myPlayerId)?.score || 0} / 250</div>
+                  <div className="score-badge">سكورك: {playersList.find(p => p.playerId === myPlayerId)?.score || 0} / 250</div>
                 </div>
               </div>
 
               {/* Active Player - Stage: Draw Card */}
               {playersList[roomState.turnIndex]?.playerId === myPlayerId && roomState.currentTurn.stage === 'draw' && (
                 <div className="glass-panel" style={{ textAlign: 'center' }}>
-                  <h3 style={{ marginBottom: '1.25rem' }}>اضغط على الكارت لتسحب كارت الضحية</h3>
+                  <h3 style={{ marginBottom: '1.25rem' }}>دوس على الكارت عشان تسحب الضحية</h3>
                   
                   <div className="card-scene" onClick={drawOnlineNumberCard}>
                     <div className="flip-card">
                       <div className="card-face card-back">
                         <div className="card-back-pattern">SEND-101</div>
-                        <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', marginTop: '1rem' }}>سحب الكارت</span>
+                        <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', marginTop: '1rem' }}>اسحب الكارت</span>
                       </div>
                     </div>
                   </div>
@@ -1872,9 +1872,9 @@ export default function App() {
               {playersList[roomState.turnIndex]?.playerId !== myPlayerId && roomState.currentTurn.stage === 'draw' && (
                 <div className="glass-panel" style={{ textAlign: 'center', padding: '2.5rem 1.5rem' }}>
                   <div style={{ fontSize: '3rem', marginBottom: '1.25rem' }}>🎲</div>
-                  <h3>بانتظار سحب كارت الرقم...</h3>
+                  <h3>مستنيين سحب كارت الرقم...</h3>
                   <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                    يقوم اللاعب {playersList[roomState.turnIndex]?.name} بسحب كارت الرقم حالياً.
+                    اللعيب {playersList[roomState.turnIndex]?.name} بيسحب كارت الرقم دلوقتي.
                   </p>
                 </div>
               )}
@@ -1889,7 +1889,7 @@ export default function App() {
                       </div>
                       <div className="card-front card-face">
                         <div className="card-front-nobody">Nobody</div>
-                        <div className="card-front-label">تم سحب كارت الـ Nobody!</div>
+                        <div className="card-front-label">اتسحب كارت الـ Nobody! 🤷‍♂️</div>
                       </div>
                     </div>
                   </div>
@@ -1897,8 +1897,8 @@ export default function App() {
                   {roomState.currentTurn.leftPlayerId === myPlayerId ? (
                     <div className="target-reveal">
                       <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                        أنت اللاعب اللي على شمال {playersList[roomState.turnIndex]?.name}!
-                        اختر له ضحية من قائمة جهات الاتصال الخاصة بك.
+                        أنت اللعيب اللي على شمال {playersList[roomState.turnIndex]?.name}!
+                        اختارله ضحية من لستة أساميك.
                       </p>
                       <div className="form-group">
                         <select
@@ -1907,7 +1907,7 @@ export default function App() {
                           value={onlineNobodyVictim}
                           onChange={(e) => setOnlineNobodyVictim(e.target.value)}
                         >
-                          <option value="">-- اختر ضحية من أسمائك --</option>
+                          <option value="">-- اختار ضحية من أساميك --</option>
                           {playersList.find(p => p.playerId === myPlayerId)?.contacts?.map((name, i) => (
                             <option key={i} value={name}>{i+1}. {name} ({roomState.selectedCategories[i]})</option>
                           ))}
@@ -1919,13 +1919,13 @@ export default function App() {
                         onClick={submitOnlineNobodyVictim}
                         disabled={!onlineNobodyVictim}
                       >
-                        إرسال الضحية المحددة
+                        ابعت الضحية اللي اخترتها
                       </button>
                     </div>
                   ) : (
                     <div className="target-reveal">
                       <p style={{ color: 'var(--text-secondary)' }}>
-                        بانتظار اللاعب {playersList.find(p => p.playerId === roomState.currentTurn.leftPlayerId)?.name} ليحدد الضحية من قائمته...
+                        مستنيين اللعيب {playersList.find(p => p.playerId === roomState.currentTurn.leftPlayerId)?.name} يختار الضحية من لستته...
                       </p>
                     </div>
                   )}
@@ -1939,7 +1939,7 @@ export default function App() {
                     // Active player execution panel
                     !roomState.currentTurn.emergencyCard ? (
                       <>
-                        <h3 style={{ marginBottom: '1rem', color: 'var(--primary)' }}>الحكم الموجه لك لتنفيذه</h3>
+                        <h3 style={{ marginBottom: '1rem', color: 'var(--primary)' }}>الحكم اللي عليك تنفذه</h3>
                         
                         <div className="dare-card" style={{ cursor: 'default', margin: '1rem 0' }}>
                           <span className={`dare-card-type ${roomState.currentTurn.chosenCard.type.includes('فويس') ? 'voice' : roomState.currentTurn.chosenCard.type.includes('مسدج') || roomState.currentTurn.chosenCard.type.includes('رسالة') ? 'message' : 'call'}`}>
@@ -1949,33 +1949,33 @@ export default function App() {
                             {roomState.currentTurn.chosenCard.text}
                           </div>
                           <div style={{ fontSize: '0.9rem', color: 'var(--warning)', marginTop: '0.5rem' }}>
-                            المستهدف بالتواصل: <strong>{roomState.currentTurn.victimName}</strong>
+                            الضحية اللي هتكلمها: <strong>{roomState.currentTurn.victimName}</strong>
                           </div>
                         </div>
 
                         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.4' }}>
-                          يجب إرسال الحكم للضحية بجدية تامة. وممنوع مسح الرسالة أو الاتصال طوال مدة اللعب!
+                          لازم تبعت الحكم للضحية بجدية تامة. وممنوع تمسح الرسالة أو تلغي الاتصال طول ما الجيم شغال!
                         </p>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                           <button className="btn btn-success" onClick={executeOnlineSuccess}>
-                            نفذت الحكم بجدية (+50 نقطة)
+                            نفذت الحكم بجدية (+50 نقطة) ✅
                           </button>
                           <button className="btn btn-danger" onClick={chickenOnlineOut}>
-                            هخلع (انسحاب طوارئ)
+                            هخلع (انسحاب طوارئ 🚨)
                           </button>
                         </div>
                       </>
                     ) : (
                       <div className="emergency-card-container" style={{ padding: '1.25rem', borderRadius: '20px' }}>
-                        <div className="emergency-header">🚨 مخرج الطوارئ: هخلع</div>
+                        <div className="emergency-header">🚨 كارت الطوارئ: هخلع</div>
                         <p style={{ fontSize: '1.1rem', margin: '1rem 0', lineHeight: '1.5', fontWeight: 600 }}>
                           {roomState.currentTurn.emergencyCard.text}
                         </p>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.5rem' }}>
                           <button className="btn btn-secondary" onClick={executeOnlineEmergency}>
-                            نفذت كارت هخلع (+20 نقطة)
+                            نفذت كارت هخلع (+20 نقطة) 🚨
                           </button>
                         </div>
                       </div>
@@ -1983,9 +1983,9 @@ export default function App() {
                   ) : (
                     // Other players waiting during execution
                     <div style={{ padding: '1rem 0' }}>
-                      <h3 style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>الحكم قيد التنفيذ الآن...</h3>
+                      <h3 style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>الحكم بيتنفذ دلوقتي...</h3>
                       <p>
-                        يواجه اللاعب {playersList[roomState.turnIndex]?.name} الحكم التالي للتواصل مع {roomState.currentTurn.victimName}:
+                        اللعيب {playersList[roomState.turnIndex]?.name} عليه الحكم ده عشان يكلم {roomState.currentTurn.victimName}:
                       </p>
                       <div className="dare-card" style={{ cursor: 'default', margin: '1rem 0', opacity: 0.85 }}>
                         <span className={`dare-card-type ${roomState.currentTurn.chosenCard.type.includes('فويس') ? 'voice' : roomState.currentTurn.chosenCard.type.includes('مسدج') || roomState.currentTurn.chosenCard.type.includes('رسالة') ? 'message' : 'call'}`}>
@@ -1996,13 +1996,13 @@ export default function App() {
                       
                       {roomState.currentTurn.emergencyCard && (
                         <div className="emergency-card-container" style={{ padding: '0.8rem', borderRadius: '14px', marginTop: '1rem' }}>
-                          <div style={{ fontWeight: 'bold', color: '#ff8a8d' }}>🚨 انسحب ولجأ لكارت هخلع:</div>
+                          <div style={{ fontWeight: 'bold', color: '#ff8a8d' }}>🚨 خلع ولجأ لكارت الطوارئ:</div>
                           <div style={{ marginTop: '0.25rem', fontSize: '0.9rem' }}>{roomState.currentTurn.emergencyCard.text}</div>
                         </div>
                       )}
 
                       <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1rem' }}>
-                        بانتظار قيام اللاعب بتأكيد إتمام التنفيذ...
+                        مستنيين اللعيب يأكد إنه نفذ...
                       </p>
                     </div>
                   )}
@@ -2011,13 +2011,13 @@ export default function App() {
 
               {/* Online Scoreboard Overlay */}
               <div className="glass-panel scoreboard">
-                <div className="scoreboard-title">لوحة النقاط (الهدف: 250 نقطة)</div>
+                <div className="scoreboard-title">جدول النقط (الهدف: 250 نقطة)</div>
                 {playersList.map(p => (
                   <div key={p.playerId} className="score-row" style={{ opacity: p.isDisconnected ? 0.5 : 1 }}>
                     <div className="score-row-meta">
                       <span>
                         {p.name} {p.playerId === playersList[roomState.turnIndex]?.playerId && '👈'}
-                        {p.isDisconnected && <span style={{ fontSize: '0.75rem', color: 'var(--danger)', marginRight: '0.5rem' }}>(منقطع)</span>}
+                        {p.isDisconnected && <span style={{ fontSize: '0.75rem', color: 'var(--danger)', marginRight: '0.5rem' }}>(فصل 🔌)</span>}
                       </span>
                       <span>{p.score} / 250</span>
                     </div>
@@ -2035,7 +2035,7 @@ export default function App() {
                   style={{ width: '100%', marginTop: '1.5rem' }}
                   onClick={leaveOnlineRoom}
                 >
-                  الخروج من الغرفة
+                  اخرج من الأوضة
                 </button>
               </div>
             </>
@@ -2047,14 +2047,14 @@ export default function App() {
               <ConfettiEffect />
               <div className="winner-box">
                 <div className="winner-crown">👑</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>بطل الجيم هو الفائز</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>الفايز بالجيم هو البطل 👑</div>
                 <div className="winner-name">{roomState.winner.name}</div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
-                  النقاط: {roomState.winner.score} نقطة
+                  النقط: {roomState.winner.score} نقطة
                 </div>
               </div>
 
-              <h3 style={{ margin: '1.5rem 0 1rem 0', fontWeight: 800, color: 'var(--danger)' }}>عقوبات اللاعبين الخاسرين ("هخلع")</h3>
+              <h3 style={{ margin: '1.5rem 0 1rem 0', fontWeight: 800, color: 'var(--danger)' }}>عقابات اللعيبة الخسرانين ("هخلع") 💀</h3>
               <div className="punishment-box">
                 {playersList.map(p => {
                   if (p.playerId === roomState.winner.playerId) return null;
@@ -2075,16 +2075,16 @@ export default function App() {
 
               {playersList.find(p => p.playerId === myPlayerId)?.isHost ? (
                 <button className="btn btn-primary" style={{ width: '100%', marginTop: '2rem' }} onClick={restartOnlineGame}>
-                  لعب مجدداً 🔄
+                  نلعب تاني 🔄
                 </button>
               ) : (
                 <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '2rem' }}>
-                  بانتظار مضيف الغرفة لبدء جيم جديد...
+                  مستنيين صاحب الأوضة يبدأ جيم جديد...
                 </p>
               )}
 
               <button className="btn btn-outline" style={{ width: '100%', marginTop: '1rem' }} onClick={leaveOnlineRoom}>
-                الخروج للرئيسية
+                ارجع لبوابة الألعاب
               </button>
             </div>
           )}
