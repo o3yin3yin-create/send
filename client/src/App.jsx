@@ -1211,7 +1211,7 @@ export default function App() {
           <span className="logo-text">{activeGame === 'send-101' ? 'SEND-101' : '101-GAMES'}</span>
         </div>
         <div className="subtitle">
-          {activeGame === 'send-101' ? 'تافة زي هاها شرير زي هيهي' : 'منصة الألعاب الجماعية والأحكام'}
+          {activeGame === 'send-101' ? 'تافه زي هاها شرير زي هيهي' : 'ألعاب قعدات ولمات الصحاب والضحك 🎮'}
         </div>
       </header>
 
@@ -1256,8 +1256,8 @@ export default function App() {
               </div>
               <div className="hub-game-details">
                 <h3 className="hub-game-title">SEND-101</h3>
-                <p className="hub-game-desc">اللعبة الحماسية لإحراج أصدقائك بجهات الاتصال! تحدى أصحابك في أحكام تواصل محرجة.</p>
-                <span className="hub-game-badge active">جاهزة للعب 🚀</span>
+                <p className="hub-game-desc">اللعبة الحماسية عشان تقفش وتفرقع أحكام على أصحابك مع جهات اتصالهم! اتحدوا بعض في أحكام تواصل مسخرة ومحرجة.</p>
+                <span className="hub-game-badge active">ادخل العب 🚀</span>
               </div>
             </div>
 
@@ -1267,9 +1267,9 @@ export default function App() {
                 <span className="hub-game-icon">🔥</span>
               </div>
               <div className="hub-game-details">
-                <h3 className="hub-game-title">حقيقة أم جرأة</h3>
-                <p className="hub-game-desc">لعبة الأسئلة والأحكام الكلاسيكية بأسلوب جديد تماماً وتحديات عصرية.</p>
-                <span className="hub-game-badge locked">قريباً 🔒</span>
+                <h3 className="hub-game-title">صراحة ولا جرأة</h3>
+                <p className="hub-game-desc">لعبة صراحة ولا جرأة الكلاسيكية بطريقة جديدة خالص وتحديات روشة.</p>
+                <span className="hub-game-badge locked">جاي في السكة 🔒</span>
               </div>
             </div>
 
@@ -1280,8 +1280,8 @@ export default function App() {
               </div>
               <div className="hub-game-details">
                 <h3 className="hub-game-title">المافيا الغامضة</h3>
-                <p className="hub-game-desc">لعبة الذكاء والشك والخدع. اعثر على أعضاء المافيا قبل أن يقضوا على المدينة!</p>
-                <span className="hub-game-badge locked">قريباً 🔒</span>
+                <p className="hub-game-desc">لعبة الذكاء والشك وحوارات المافيا. اقفش المافيا اللي وسطكوا قبل ما يخلصوا على الكل!</p>
+                <span className="hub-game-badge locked">جاي في السكة 🔒</span>
               </div>
             </div>
           </div>
@@ -1432,11 +1432,28 @@ export default function App() {
               >
                 🧪 ملء تلقائي للتجربة (مؤقت)
               </button>
-              <button className="btn btn-secondary" style={{ width: '100%' }} onClick={submitLocalNames}>
-                {currentEnteringPlayerIdx < localGameState.players.length - 1 
-                  ? 'حفظ وتمرير الموبايل للعيب اللي بعده'
-                  : 'يلا نلعب! 🎮'}
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  className="btn btn-outline"
+                  style={{ flex: 1 }}
+                  onClick={() => {
+                    playSound('click');
+                    if (currentEnteringPlayerIdx > 0) {
+                      setCurrentEnteringPlayerIdx(currentEnteringPlayerIdx - 1);
+                      setLocalContactsInput(localGameState.players[currentEnteringPlayerIdx - 1].contacts);
+                    } else {
+                      setLocalGameState(null);
+                    }
+                  }}
+                >
+                  رجوع
+                </button>
+                <button className="btn btn-secondary" style={{ flex: 2 }} onClick={submitLocalNames}>
+                  {currentEnteringPlayerIdx < localGameState.players.length - 1 
+                    ? 'حفظ وتمرير الموبايل للعيب اللي بعده'
+                    : 'يلا نلعب! 🎮'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -1780,6 +1797,9 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+                  <button className="btn btn-outline" style={{ width: '100%', marginTop: '1.5rem' }} onClick={leaveOnlineRoom}>
+                    اخرج من الأوضة
+                  </button>
                 </div>
               ) : (
                 <>
@@ -1829,9 +1849,14 @@ export default function App() {
                   >
                     🧪 ملء تلقائي للتجربة (مؤقت)
                   </button>
-                  <button className="btn btn-secondary" style={{ width: '100%' }} onClick={submitOnlineNames}>
-                    احفظ وابعت الأسامي
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                    <button className="btn btn-outline" style={{ flex: 1 }} onClick={leaveOnlineRoom}>
+                      اخرج من الأوضة
+                    </button>
+                    <button className="btn btn-secondary" style={{ flex: 2 }} onClick={submitOnlineNames}>
+                      احفظ وابعت الأسامي
+                    </button>
+                  </div>
                 </>
               )}
             </div>
